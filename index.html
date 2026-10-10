@@ -372,7 +372,7 @@ function pgLap(){
     <div class="toolbar">
       <input type="date" id="fTgl" value="${tgl}" onchange="renderLapList()">
       <select id="fUser" onchange="renderLapList()"><option value="">Semua Petugas</option>
-        ${[...new Set(LAP.map(l=>l.petugas))].map(u=>`<option>${esc(u)}</option>`).join('')}</select>
+        ${[...new Set([...users.filter(u=>u.role==='petugas').map(u=>u.nama),...LAP.map(l=>l.petugas)])].sort().map(u=>`<option>${esc(u)}</option>`).join('')}</select>
       <input placeholder="cari nama / rekening..." id="fQ" onkeyup="renderLapList()">
       <button class="btn-a" onclick="cetakLaporanHarian()">🖨️ PDF</button>
       <button class="btn-a" onclick="exportLaporanGambar()">🖼 Gambar</button>
@@ -801,9 +801,12 @@ function pgSync(){
     ${SYNC_INFO?`<br>Update server terakhir: ${esc(SYNC_INFO)}`:''}</p>
     <div class="toolbar">
       <button class="btn-p" style="width:auto;margin:0" onclick="syncPull(true)">⬇️ Tarik data terbaru</button>
-      <button class="btn-a" onclick="syncPush('data')">⬆️ Kirim data ${pusat?'(semua cabang)':'(cabang '+esc(syncScope())+')'}</button>
-      <button class="btn-a" onclick="syncPush('laporan')">⬆️ Kirim laporan</button>
-      ${pusat?'<button class="btn-s" onclick="syncPush(\'users\')">⬆️ Akun</button><button class="btn-s" onclick="syncPush(\'aomap\')">⬆️ Pemetaan AO</button><button class="btn-s" onclick="syncPush(\'cabangs\')">⬆️ Cabang</button>':''}
+      ${pusat?`<button class="btn-a" onclick="syncPush('data')">⬆️ Kirim data (semua cabang)</button>
+      <button class="btn-s" onclick="syncPush('users')">⬆️ Akun</button>
+      <button class="btn-s" onclick="syncPush('aomap')">⬆️ Pemetaan AO</button>
+      <button class="btn-s" onclick="syncPush('cabangs')">⬆️ Cabang</button>
+      <button class="btn-s" onclick="syncPush('laporan')">⬆️ Kirim laporan</button>`:
+      `<span class="mut">Laporan Anda terkirim otomatis tiap menyimpan. Data diatur admin — Anda cukup menarik data terbaru.</span>`}
     </div>
     <p class="mut" style="margin-top:10px"><b>Alur kerja yang disarankan:</b><br>
     1. <b>Pusat</b> upload file Excel tiap cabang → klik <b>Kirim data</b> (semua cabang) → klik <b>Akun</b>, <b>Pemetaan AO</b>, <b>Cabang</b> sekali saja.<br>
