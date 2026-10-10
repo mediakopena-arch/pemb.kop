@@ -194,9 +194,25 @@ const todayISO=()=>new Date().toISOString().slice(0,10);
 const tglNow=()=>new Date().toLocaleDateString('id-ID');
 
 /* ================= AUTH ================= */
-function doLogin(){
+async function doLogin(){
   const u=document.getElementById('lgUser').value.trim(),p=document.getElementById('lgPass').value;
-  const f=users.find(x=>x.user===u&&x.pass===p);
+  const btn=document.querySelector('#loginView .btn-p');
+  let f=users.find(x=>x.user===u&&x.pass===p);
+  if(!f&&SYNC_URL){
+    // Akun belum ada di perangkat ini -> cek dulu ke server (login lintas HP)
+    if(btn){btn.disabled=true;btn.textContent='⏳ Memeriksa akun ke server...'}
+    document.getElementById('lgErr').style.display='none';
+    try{
+      const j=await syncGet();
+      if(j.ok&&Array.isArray(j.users)&&j.users.length){
+        users=j.users.filter(x=>x.user!=='admin');
+        users.unshift({nama:'Administrator',user:'admin',pass:'admin123',role:'admin',cabang:'all'});
+        jsave(K.users,users);
+        f=users.find(x=>x.user===u&&x.pass===p);
+      }
+    }catch(e){}
+    if(btn){btn.disabled=false;btn.textContent='Masuk'}
+  }
   if(!f){document.getElementById('lgErr').style.display='block';return}
   SES={user:f.user,nama:f.nama,role:f.role,cabang:f.cabang||'all'};jsave(K.ses,SES);showApp();
 }
