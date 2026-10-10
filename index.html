@@ -741,7 +741,7 @@ function delUser(u){if(confirm('Hapus akun '+u+'?')){users=users.filter(x=>x.use
    3. Deploy > New deployment > Web app: Execute as = Me, Access = Anyone. Salin URL-nya.
    4. Isi URL itu ke SYNC_URL di bawah, dan samakan SYNC_SECRET dengan SECRET di Code.gs.
    Kosongkan SYNC_URL jika ingin mode offline (data lokal saja). */
-const SYNC_URL='https://script.google.com/macros/s/AKfycbzi3Y3SEqvAzFXqK0TAXq39nQg3QyhqF9P3P8mqVuYfoOpZELqqbBGwVEMA7NsF9lSJ/exec';
+const SYNC_URL='https://script.google.com/macros/s/AKfycbwkK44P8Alh3Q6VQC4_UsREWWmqsFTHoxc4bC6UjWUqtS2squXoCoxQlF8_jpxKWJ8r/exec';
 const SYNC_SECRET='kopena-sync-2026';
 let SYNC_INFO=null;
 function syncScope(){return (SES&&SES.cabang)||'all'}
@@ -750,9 +750,12 @@ async function syncGet(){
   return await res.json();
 }
 async function syncSend(kind,records){
-  const res=await fetch(SYNC_URL,{method:'POST',body:JSON.stringify({secret:SYNC_SECRET,kind,records,scope:syncScope()})});
-  const j=await res.json();
-  return j&&j.ok;
+  try{
+    const res=await fetch(SYNC_URL,{method:'POST',body:JSON.stringify({secret:SYNC_SECRET,kind,records,scope:syncScope()})});
+    const j=await res.json();
+    if(j&&j.ok)return {ok:true};
+    return {ok:false,error:(j&&j.error)||('HTTP '+res.status+' — server menjawab tidak dikenali')};
+  }catch(err){return {ok:false,error:'tidak terhubung: '+err.message}}
 }
 async function syncPull(manual){
   if(!SYNC_URL){if(manual)notify('URL server belum diisi (SYNC_URL)',false);return}
@@ -789,9 +792,9 @@ async function syncPush(kind,quiet){
   else if(kind==='users'){if(syncScope()!=='all'){notify('Hanya akun Pusat yang boleh mengirim daftar akun',false);return}records=users;msg='daftar akun'}
   else if(kind==='aomap'){if(syncScope()!=='all'){notify('Hanya akun Pusat',false);return}records=AOMAP;msg='pemetaan AO'}
   else if(kind==='cabangs'){records=CABANGS;msg='daftar cabang'}
-  const ok=await syncSend(kind,records);
-  if(!quiet)notify(ok?'✓ Terkirim ke server: '+msg:'✗ Gagal kirim — cek koneksi & URL server',ok);
-  return ok;
+  const r=await syncSend(kind,records);
+  if(!quiet)notify(r.ok?'✓ Terkirim ke server: '+msg:'✗ Gagal kirim: '+r.error,r.ok);
+  return r.ok;
 }
 function pgSync(){
   const pusat=syncScope()==='all';
