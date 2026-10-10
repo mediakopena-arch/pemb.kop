@@ -63,6 +63,19 @@ tr:hover td{background:#fafcfb}
 .notif.ok{display:block;background:#e7f6ee;color:#1c7a43}
 .notif.bad{display:block;background:#fdecea;color:var(--red)}
 @media(max-width:820px){aside{width:70px}.brand{font-size:12px!important;padding:0 10px 14px!important}nav a{padding:11px 12px;font-size:12px}main{margin-left:70px}.grid2{grid-template-columns:1fr}}
+#printArea{display:none}
+@media print{
+  body *{visibility:hidden}
+  #printArea,#printArea *{visibility:visible}
+  #printArea{display:block!important;position:absolute;left:0;top:0;width:100%;background:#fff;color:#000;padding:0}
+  #printArea h1{font-size:14pt;margin:0 0 2px}
+  #printArea .print-sub{font-size:9pt;color:#333;margin:0 0 10px}
+  #printArea h2{font-size:11pt;margin:12px 0 4px}
+  #printArea table{width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:6px}
+  #printArea th,#printArea td{border:1px solid #999;padding:3px 5px;text-align:left}
+  #printArea th{background:#eee}
+  #printArea td.num{text-align:right;white-space:nowrap}
+}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0e6e5d">
@@ -106,6 +119,8 @@ tr:hover td{background:#fafcfb}
 </div>
 
 <!-- modal tambah akun -->
+<div id="printArea"></div>
+
 <div class="modal" id="mdlUser"><div class="box">
   <h3 style="color:var(--p);margin-bottom:14px">Tambah Akun Petugas</h3>
   <label>Nama Lengkap</label><input id="nuNama">
@@ -214,7 +229,9 @@ function getMenus(){
  {id:'lap',t:'📋 Laporan Harian'},
  {id:'out',t:'💰 Daftar Outstanding'},
  {id:'pinj',t:'📑 Pinjaman & Kondisi Call'},
- {id:'up',t:'⬆️ Upload Data'},
+ ...(SES&&SES.role==='admin'?[{id:'up',t:'⬆️ Upload Data'}]:[]),
+ {id:'rpt',t:'🖨️ Laporan'},
+ {id:'sync',t:'🔄 Sinkronisasi'},
  ...(SES&&SES.role==='admin'?[{id:'ao',t:'👥 Pembagian Data AO'},{id:'usr',t:'⚙️ Kelola Akun'}]:[])
 ];
 }
@@ -226,7 +243,7 @@ function go(id){
   PAGE=id;
   document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.dataset.id===id));
   document.getElementById('pageTitle').textContent=getMenus().find(m=>m.id===id)?.t.replace(/^[^ ]+ /,'')||'';
-  ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,sync:pgSync,ao:pgAO,usr:pgUsr})[id]();
+  ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,rpt:pgRpt,sync:pgSync,ao:pgAO,usr:pgUsr})[id]();
   window.scrollTo(0,0);
 }
 function notify(t,ok=true){const n=document.getElementById('notif');n.className='notif '+(ok?'ok':'bad');n.textContent=t;setTimeout(()=>n.className='notif',3500)}
@@ -730,6 +747,68 @@ function pgSync(){
     3. <b>Petugas AO</b>: kirim laporan call → admin/Pusat klik <b>Tarik data terbaru</b> → semua laporan terkumpul.<br>
     Data di server digabung <b>per cabang</b> — file cabang yang dikirim cabang hanya menimpa data cabang itu sendiri, tidak menyentuh cabang lain.</p>
   </div>`;
+}
+/* ================= LAPORAN / LAMPIRAN CETAK ================= */
+function pgRpt(){
+  const aos=[...new Set(myData().map(d=>d.ao))].sort();
+  document.getElementById('content').innerHTML=`
+  <div class="panel"><h3>🖨️ Laporan & Lampiran Cetak</h3>
+    <div class="panel" style="background:#f6f9f8">
+      <h3 style="margin-bottom:6px">📋 Lampiran Kunjungan AO</h3>
+      <p class="mut">Daftar nasabah untuk lampiran kunjungan pertama AO — siap cetak / simpan PDF.</p>
+      <div class="toolbar" style="margin-top:8px">
+        ${SES.role==='admin'?`<select id="rAO"><option value="">Semua AO (data terlihat)</option>${aos.map(a=>`<option>${esc(a)}</option>`).join('')}</select>`:'<span class="mut">👤 Data Anda ('+esc(SES.nama)+')</span>'}
+        <select id="rSort"><option value="nama">Urut: Nama</option><option value="rek">Urut: No. Rekening</option></select>
+        <button class="btn-a" onclick="cetakLampiran()">🖨️ Cetak / Simpan PDF</button>
+      </div>
+    </div>
+    <div class="panel" style="background:#f6f9f8">
+      <h3 style="margin-bottom:6px">🏷️ Laporan Kolektibilitas (Coll)</h3>
+      <p class="mut">Rekap jumlah & rincian nasabah per klasifikasi Coll — siap cetak / simpan PDF.</p>
+      <div class="toolbar" style="margin-top:8px">
+        <select id="rColl"><option value="">Semua Coll</option>${[1,2,3,4,5].map(c=>`<option value="${c}">${collLabel(c)}</option>`).join('')}</select>
+        <select id="rStatus"><option value="">Semua Status</option><option value="1">✓ Sudah angsur</option><option value="0">✗ Belum angsur</option></select>
+        <button class="btn-a" onclick="cetakColl()">🖨️ Cetak / Simpan PDF</button>
+      </div>
+    </div>
+    <p class="mut">💡 Tombol Cetak membuka dialog print — di HP pilih <b>"Simpan sebagai PDF"</b> untuk jadi file lampiran.</p>
+  </div>`;
+}
+function printInit(title,sub){
+  document.getElementById('printArea').innerHTML=`<h1>${esc(title)}</h1><div class="print-sub">${esc(sub)}</div>`;
+}
+function cetakLampiran(){
+  const ao=SES.role==='admin'?(document.getElementById('rAO')?.value||''):'';
+  const sort=document.getElementById('rSort').value;
+  let rows=myData(); if(ao)rows=rows.filter(d=>d.ao===ao);
+  rows.sort((a,b)=>sort==='rek'?String(a.rekening).localeCompare(String(b.rekening)):a.nama.localeCompare(b.nama));
+  const tgl=new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
+  printInit('Lampiran Kunjungan AO — KoperasiKu',`Dicetak ${tgl} · ${ao?'AO: '+ao:'Semua AO'} · ${rows.length} rekening`);
+  document.getElementById('printArea').innerHTML+=`<table>
+   <tr><th>No</th><th>No. Rekening</th><th>Nama Nasabah</th><th>Produk</th><th>Coll</th><th>Status Angsur</th><th>Angsuran/bln</th><th>Outstanding</th></tr>
+   ${rows.map((d,i)=>`<tr><td>${i+1}</td><td>${d.rekening}</td><td>${esc(d.nama)}</td><td>${d.kode} ${esc(d.produk)}</td><td>${collLabel(d.coll_val)}</td><td>${d.sudah_angsur?'Sudah':'Belum'}</td><td class="num">${rp(d.tag_pokok)}</td><td class="num">${rp(d.outstanding)}</td></tr>`).join('')}
+   <tr><td colspan="7" style="text-align:right"><b>TOTAL OUTSTANDING</b></td><td class="num"><b>${rp(rows.reduce((s,d)=>s+d.outstanding,0))}</b></td></tr>
+  </table>`;
+  window.print();
+}
+function cetakColl(){
+  const f=document.getElementById('rColl').value;
+  const st=document.getElementById('rStatus').value;
+  const clamp=d=>Math.min(5,Math.max(1,d.coll_val||1));
+  const rows=myData().filter(d=>(!f||clamp(d)==f)&&(!st||(d.sudah_angsur?1:0)==st));
+  const tgl=new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
+  printInit('Laporan Kolektibilitas (Coll) — KoperasiKu',`Dicetak ${tgl} · ${rows.length} rekening`);
+  let h=`<table><tr><th>Kolektibilitas</th><th>Jumlah</th><th>Total Outstanding</th><th>Total Tunggakan</th></tr>`;
+  [1,2,3,4,5].forEach(c=>{const g=rows.filter(d=>clamp(d)===c);
+    h+=`<tr><td>${collLabel(c)}</td><td>${g.length}</td><td class="num">${rp(g.reduce((s,d)=>s+d.outstanding,0))}</td><td class="num">${rp(g.reduce((s,d)=>s+Math.max(0,d.tak_pokok),0))}</td></tr>`});
+  h+=`</table>`;
+  [1,2,3,4,5].forEach(c=>{const g=rows.filter(d=>clamp(d)===c);if(!g.length)return;
+    h+=`<h2>${collLabel(c)} (${g.length})</h2><table>
+     <tr><th>No</th><th>No. Rekening</th><th>Nama</th><th>AO</th><th>Status</th><th>Outstanding</th><th>Tunggakan</th></tr>
+     ${g.sort((a,b)=>b.outstanding-a.outstanding).map((d,i)=>`<tr><td>${i+1}</td><td>${d.rekening}</td><td>${esc(d.nama)}</td><td>${esc(d.ao)}</td><td>${d.sudah_angsur?'Sudah':'Belum'}</td><td class="num">${rp(d.outstanding)}</td><td class="num">${rp(Math.max(0,d.tak_pokok))}</td></tr>`).join('')}
+    </table>`});
+  document.getElementById('printArea').innerHTML+=h;
+  window.print();
 }
 /* ================= INIT ================= */
 if(SES&&users.find(x=>x.user===SES.user))showApp();
