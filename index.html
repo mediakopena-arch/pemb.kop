@@ -62,15 +62,14 @@ tr:hover td{background:#fafcfb}
 .notif{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none}
 .notif.ok{display:block;background:#e7f6ee;color:#1c7a43}
 .notif.bad{display:block;background:#fdecea;color:var(--red)}
+.mnav{display:none}
 @media(max-width:820px){
- aside{top:auto;bottom:0;left:0;right:0;width:100%;height:60px;flex-direction:row;align-items:center;padding:0 2px;z-index:40}
- aside .brand{display:none}
- nav{display:flex;flex-direction:row;width:100%;margin:0}
- nav a{flex:1 1 0;min-width:0;padding:5px 1px;font-size:9.5px;text-align:center;border-left:none;border-top:3px solid transparent;line-height:1.3;white-space:normal;overflow:visible}
- nav a.active{border-top-color:var(--a);border-left-color:transparent;background:rgba(255,255,255,.08)}
- aside>a[href]{display:none!important}
- main{margin-left:0;padding:14px 14px 80px}
- .topbar{flex-wrap:wrap;gap:8px;margin-bottom:14px}
+ aside{display:none}
+ main{margin-left:0;padding:10px 12px 30px}
+ .mnav{display:flex;position:sticky;top:0;z-index:30;background:var(--pd);overflow-x:auto;margin:-10px -12px 12px;padding:0 4px;-webkit-overflow-scrolling:touch}
+ .mnav a{flex:0 0 auto;padding:11px 12px;color:#cfe3de;font-size:12px;text-decoration:none;border-bottom:3px solid transparent;white-space:nowrap}
+ .mnav a.active{color:#fff;border-bottom-color:var(--a);background:rgba(255,255,255,.08)}
+ .topbar{flex-wrap:wrap;gap:8px;margin-bottom:10px}
  .topbar h2{font-size:17px}
  .userchip{font-size:11px;padding:6px 10px;max-width:62vw}
  .grid2{grid-template-columns:1fr}
@@ -128,6 +127,7 @@ tr:hover td{background:#fafcfb}
   <div class="topbar"><h2 id="pageTitle">Beranda</h2>
     <div style="display:flex;gap:8px;align-items:center"><div class="userchip">👤 <b id="chipName"></b> <span class="mut" id="chipRole"></span></div><button class="btn-s" style="padding:7px 12px" onclick="logout()" title="Keluar">⏻</button></div>
   </div>
+  <div class="mnav" id="mnav"></div>
   <div class="notif" id="notif"></div>
   <div id="content"></div>
 </main>
@@ -267,12 +267,14 @@ function getMenus(){
 ];
 }
 function renderMenu(){
-  document.getElementById('menu').innerHTML=getMenus().map(m=>
+  const h=getMenus().map(m=>
     `<a href="#" data-id="${m.id}" onclick="go('${m.id}');return false">${m.t}</a>`).join('');
+  document.getElementById('menu').innerHTML=h;
+  const mv=document.getElementById('mnav');if(mv)mv.innerHTML=h;
 }
 function go(id){
   PAGE=id;
-  document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.dataset.id===id));
+  document.querySelectorAll('nav a, .mnav a').forEach(a=>a.classList.toggle('active',a.dataset.id===id));
   document.getElementById('pageTitle').textContent=getMenus().find(m=>m.id===id)?.t.replace(/^[^ ]+ /,'')||'';
   ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,rpt:pgRpt,sync:pgSync,ao:pgAO,usr:pgUsr})[id]();
   window.scrollTo(0,0);
@@ -341,14 +343,15 @@ function pgHome(){
 /* ================= LAPORAN HARIAN ================= */
 function pgLap(){
   const tgl=todayISO();
-  const opts=myData().map(d=>`<option value="${d.rekening}">${d.rekening} — ${esc(d.nama)} — ${d.sudah_angsur?'SUDAH angsur':'BELUM angsur'}</option>`).join('');
+  lpPicked=null;
   document.getElementById('content').innerHTML=`
   <div class="panel"><h3>Input Laporan Call Harian ${SES.role==='admin'?'':'<span class="mut">(data nasabah Anda)</span>'}</h3>
     <div class="rowflex">
       <div><label>Tanggal</label><input type="date" id="lpTgl" value="${tgl}"></div>
-      <div style="flex:2;min-width:220px"><label>Nasabah — ketik nama / rekening</label>
-        <input id="lpRek" list="lpList" placeholder="ketik, lalu pilih dari saran..." autocomplete="off">
-        <datalist id="lpList">${opts}</datalist></div>
+      <div style="flex:2;min-width:220px;position:relative"><label>Nasabah — ketik nama / rekening</label>
+        <input id="lpRek" placeholder="ketik min. 2 huruf, lalu pilih..." autocomplete="off"
+          oninput="saranNasabah()" onblur="setTimeout(()=>document.getElementById('lpSaran').style.display='none',150)">
+        <div id="lpSaran" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-top:none;border-radius:0 0 8px 8px;max-height:230px;overflow-y:auto;z-index:25;box-shadow:0 10px 22px rgba(0,0,0,.18)"></div></div>
       <div><label>Hasil Call</label><select id="lpHasil">
         <option>Janji bayar</option><option>Sudah membayar</option><option>Telepon diangkat - belum janji</option>
         <option>Telepon tidak diangkat</option><option>Visit - bertemu nasabah</option>
@@ -370,10 +373,27 @@ function pgLap(){
   if(SES.role!=='admin')document.getElementById('fUser').value=SES.nama;
   renderLapList();
 }
+let lpPicked=null;
+function saranNasabah(){
+  lpPicked=null;
+  const q=document.getElementById('lpRek').value.trim().toLowerCase();
+  const box=document.getElementById('lpSaran');
+  if(q.length<2){box.style.display='none';return}
+  const hit=myData().filter(d=>d.nama.toLowerCase().includes(q)||String(d.rekening).includes(q)).slice(0,8);
+  if(!hit.length){box.style.display='none';return}
+  box.innerHTML=hit.map(d=>`<div style="padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px" onmousedown="pilihNasabah('${d.rekening}')"><b>${esc(d.nama)}</b><br><span class="mut">${d.rekening} · ${d.sudah_angsur?'✓ SUDAH':'✗ BELUM'} angsur · ${rp(d.outstanding)}</span></div>`).join('');
+  box.style.display='block';
+}
+function pilihNasabah(rek){
+  const d=myData().find(x=>String(x.rekening)===String(rek));if(!d)return;
+  lpPicked=d;
+  document.getElementById('lpRek').value=d.rekening+' — '+d.nama;
+  document.getElementById('lpSaran').style.display='none';
+}
 function saveLap(){
   const q=document.getElementById('lpRek').value.trim();
-  const d=myData().find(x=>x.rekening===q)||myData().find(x=>x.nama.toUpperCase()===q.toUpperCase());
-  if(!d){notify('Nasabah tidak ditemukan — ketik lalu pilih dari daftar saran!',false);return}
+  const d=lpPicked||myData().find(x=>String(x.rekening)===q)||myData().find(x=>x.nama.toUpperCase()===q.toUpperCase());
+  if(!d){notify('Nasabah tidak ditemukan — ketik nama/rekening lalu pilih dari daftar yang muncul!',false);return}
   const rek=d.rekening;
   LAP.unshift({
     id:Date.now(),tanggalISO:document.getElementById('lpTgl').value,
