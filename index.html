@@ -171,7 +171,7 @@ function addCabang(){
   if(k==='all'||CABANGS.some(c=>c.kode===k)){notify('Kode cabang sudah terdaftar',false);return}
   const n=(prompt('Nama cabang (huruf kapital, contoh: LIMPUNG):')||'').trim().toUpperCase();
   if(!n){notify('Nama cabang wajib diisi',false);return}
-  CABANGS.push({kode:k,nama:n});jsave(KCAB,CABANGS);
+  CABANGS.push({kode:k,nama:n});jsave(KCAB,CABANGS);syncPush('cabangs',true);
   notify('Cabang '+k+' — '+n+' ditambahkan ✔');pgUsr();
 }
 function delCabang(k){
@@ -242,20 +242,19 @@ function logout(){
   const er=document.getElementById('lgErr'); if(er)er.style.display='none';
   if(u)u.focus();
 }
+let _pullTimer=null;
+function startAutoPull(){
+  if(_pullTimer)return;
+  _pullTimer=setInterval(()=>{if(SES&&!document.hidden)syncPull(false)},120000);
+  document.addEventListener('visibilitychange',()=>{if(SES&&!document.hidden)syncPull(false)});
+}
 function showApp(){
   document.getElementById('loginView').style.display='none';
   document.getElementById('appView').style.display='block';
   document.getElementById('chipName').textContent=SES.nama;
   document.getElementById('chipRole').textContent='· '+(SES.role==='admin'?'Admin':'Petugas')+(myCabang()==='all'?' · 🏛️ Pusat':' · 🏢 '+myCabang());
   renderMenu();go('home');
-  if(SYNC_URL){
-    syncPull(false);
-    setInterval(()=>{
-      if(!SES||document.hidden)return;
-      if(PAGE==='lap')return;  // jangan ganggu form yang sedang diisi
-      syncPull(false);
-    },120000);
-  }
+  if(SYNC_URL){syncPull(false);startAutoPull()}
   document.getElementById('lgPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 }
 document.getElementById('lgPass')?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
@@ -268,7 +267,7 @@ function getMenus(){
  {id:'lap',t:'📋 Laporan Harian'},
  {id:'out',t:'💰 Daftar Outstanding'},
  {id:'pinj',t:'📑 Pinjaman & Kondisi Call'},
- ...(SES&&SES.role==='admin'?[{id:'up',t:'⬆️ Upload Data'}]:[]),
+ ...(SES&&SES.role==='admin'?[{id:'up',t:'⬆️ Upload Data'},{id:'rw',t:'📈 Riwayat Mingguan'}]:[]),
  {id:'rpt',t:'🖨️ Laporan'},
  {id:'sync',t:'🔄 Sinkronisasi'},
  ...(SES&&SES.role==='admin'?[{id:'ao',t:'👥 Pembagian Data AO'},{id:'usr',t:'⚙️ Kelola Akun'}]:[])
@@ -284,7 +283,7 @@ function go(id){
   PAGE=id;
   document.querySelectorAll('nav a, .mnav a').forEach(a=>a.classList.toggle('active',a.dataset.id===id));
   document.getElementById('pageTitle').textContent=getMenus().find(m=>m.id===id)?.t.replace(/^[^ ]+ /,'')||'';
-  ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,rpt:pgRpt,sync:pgSync,ao:pgAO,usr:pgUsr})[id]();
+  ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,rpt:pgRpt,sync:pgSync,ao:pgAO,usr:pgUsr,rw:pgRw})[id]();
   window.scrollTo(0,0);
 }
 function notify(t,ok=true){const n=document.getElementById('notif');n.className='notif '+(ok?'ok':'bad');n.textContent=t;setTimeout(()=>n.className='notif',3500)}
@@ -595,14 +594,103 @@ function doUpload(){
           throw new Error('File ini berisi data cabang '+(fcb.cabang_nama||fcb.cabang)+' ('+fcb.cabang+') — berbeda dengan cabang akun Anda ('+SES.cabang+'). Data TIDAK dimuat agar tidak tercampur.');
         }
       }
-      DATA=rows;DATA.forEach(d=>d.sudah_angsur=sudahAngsur(d));jsave(K.data,DATA);
+      rows.forEach(d=>d.sudah_angsur=sudahAngsur(d));
+      const cabs=new Set(rows.map(cabOf));
+      const isSample=DATA.length===SAMPLE_DATA.length&&DATA[0]&&DATA[0].rekening===SAMPLE_DATA[0].rekening;
+      const old=isSample?[]:DATA.filter(d=>cabs.has(cabOf(d)));
+      const df=old.length?diffRows(old,rows):null;
+      DATA=(isSample?[]:DATA.filter(d=>!cabs.has(cabOf(d)))).concat(rows);
+      jsave(K.data,DATA);
+      cabs.forEach(cb=>saveRiwayat(cb,rows.filter(r=>cabOf(r)===cb),df));
       const nAO=new Set(rows.map(r=>r.ao)).size;
       document.getElementById('upMsg').innerHTML=`<div class="notif ok">✔ Berhasil! ${rows.length} rekening dimuat, <b>otomatis terbagi ke ${nAO} kelompok AO</b>. Lanjutkan di menu <b>Pembagian Data AO</b> untuk mengaitkan ke akun petugas.</div>`;
+      const rw=RIWAYAT.filter(r=>cabs.has(r.cabang)&&r.tgl===todayISO());
+      document.getElementById('upMsg').innerHTML+=rw.map(r=>`<div class="notif ok" style="display:block;margin-top:8px">📈 <b>${esc(r.cabang)} ${esc(r.nama)}</b> vs upload sebelumnya: ${ringkasDiff(r)}</div>`).join('')+'<p class="mut" style="margin-top:6px">Detail: menu <b>Riwayat Mingguan</b>.</p>';
       notify('Data berhasil diupload ✔');
       syncPush('data',true);
     }catch(err){document.getElementById('upMsg').innerHTML=`<div class="notif bad">✖ Gagal: ${esc(err.message)}</div>`}
   };
   rd.readAsText(f);
+}
+/* ================= RIWAYAT MINGGUAN ================= */
+const KRW='kop_riwayat';
+let RIWAYAT=jload(KRW,[]);
+const collOf=d=>Math.min(5,Math.max(1,d.coll_val||1));
+function snapRows(rows){
+  const s={n:rows.length,out:0,tung:0,sudah:0,coll:{1:0,2:0,3:0,4:0,5:0},ao:{}};
+  rows.forEach(d=>{const t=Math.max(0,d.tak_pokok||0);s.out+=d.outstanding||0;s.tung+=t;if(d.sudah_angsur)s.sudah++;s.coll[collOf(d)]++;
+    const a=s.ao[d.ao]=s.ao[d.ao]||{n:0,out:0,tung:0,sudah:0};a.n++;a.out+=d.outstanding||0;a.tung+=t;if(d.sudah_angsur)a.sudah++});
+  return s;
+}
+function diffRows(oldR,newR){
+  const om=new Map(oldR.map(d=>[d.rekening,d])),nm=new Map(newR.map(d=>[d.rekening,d]));
+  const r={naik:[],turun:[],tunggak:[],keluar:[],baru:[]};
+  newR.forEach(d=>{const o=om.get(d.rekening);
+    if(!o){r.baru.push([d.rekening,d.nama,d.ao,collOf(d),d.outstanding]);return}
+    if(collOf(d)>collOf(o))r.naik.push([d.rekening,d.nama,d.ao,collOf(o),collOf(d)]);
+    else if(collOf(d)<collOf(o))r.turun.push([d.rekening,d.nama,d.ao,collOf(o),collOf(d)]);
+    const to=Math.max(0,o.tak_pokok||0),tn=Math.max(0,d.tak_pokok||0);
+    if(tn>to)r.tunggak.push([d.rekening,d.nama,d.ao,to,tn]);
+  });
+  oldR.forEach(o=>{if(!nm.has(o.rekening))r.keluar.push([o.rekening,o.nama,o.ao,collOf(o),o.outstanding])});
+  return r;
+}
+function saveRiwayat(cab,rows,df){
+  const e={id:Date.now()+'-'+cab,tgl:todayISO(),cabang:cab,nama:(rows[0]&&rows[0].cabang_nama)||cab,s:snapRows(rows),diff:null};
+  if(df){const keep=a=>a.filter(x=>cabOf({rekening:x[0]})===cab).slice(0,200);
+    e.diff={};Object.keys(df).forEach(k=>{e.diff[k]={n:df[k].filter(x=>cabOf({rekening:x[0]})===cab).length,rows:keep(df[k])}})}
+  RIWAYAT=RIWAYAT.filter(r=>!(r.cabang===cab&&r.tgl===e.tgl));  // upload ulang di hari yang sama = koreksi
+  RIWAYAT.push(e);RIWAYAT.sort((a,b)=>a.tgl<b.tgl?-1:a.tgl>b.tgl?1:0);
+  RIWAYAT=RIWAYAT.slice(-80);
+  try{jsave(KRW,RIWAYAT)}catch(err){RIWAYAT=RIWAYAT.slice(-20);try{jsave(KRW,RIWAYAT)}catch(e2){}}
+}
+function fmtDiff(a,b,badUp){
+  if(b==null)return '';const d=a-b;if(!d)return '<span class="mut"> =</span>';
+  const bad=badUp?d>0:d<0;
+  return ` <small style="color:${bad?'var(--red)':'#1c7a43'}">${d>0?'+':'−'}${Math.abs(d).toLocaleString('id-ID')}</small>`;
+}
+function ringkasDiff(e){
+  if(!e.diff)return '<span class="mut">Upload pertama untuk cabang ini — belum ada pembanding.</span>';
+  const x=e.diff;
+  return `↑ Coll naik <b>${x.naik.n}</b> · ↓ Coll turun <b>${x.turun.n}</b> · tunggakan bertambah <b>${x.tunggak.n}</b> · keluar dari daftar (lunas/hapus) <b>${x.keluar.n}</b> · rekening baru <b>${x.baru.n}</b>`;
+}
+function tblDiff(title,rows,cols,fmt){
+  if(!rows.length)return '';
+  return `<details style="margin:6px 0"><summary><b>${title}</b> (${rows.length}${rows.length>=200?'+':''})</summary>
+  <div style="overflow-x:auto"><table><tr><th>Rekening</th><th>Nama</th><th>AO</th><th>${cols[0]}</th><th>${cols[1]}</th></tr>
+  ${rows.slice(0,200).map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${fmt(r[3])}</td><td>${fmt(r[4])}</td></tr>`).join('')}</table></div></details>`;
+}
+function pgRw(){
+  const cabs=[...new Set(RIWAYAT.map(r=>r.cabang))];
+  const body=!cabs.length?'<p class="mut">Belum ada riwayat. Riwayat tercatat otomatis setiap kali data diupload di perangkat ini.</p>':cabs.map(cb=>{
+    const list=RIWAYAT.filter(r=>r.cabang===cb);
+    const rev=list.slice().reverse();
+    const last=list[list.length-1];
+    return `<div class="panel"><h3>🏢 ${esc(cb)} — ${esc(last.nama)}</h3>
+    <div style="overflow-x:auto"><table><tr><th>Tgl upload</th><th class="r">Rek.</th><th class="r">Outstanding</th><th class="r">Tunggakan</th>
+      <th class="r">Coll 1</th><th class="r">Coll 2</th><th class="r">Coll 3</th><th class="r">Coll 4</th><th class="r">Coll 5</th><th class="r">Sudah angsur</th></tr>
+    ${rev.map((r,i)=>{const p=rev[i+1];const s=r.s,q=p&&p.s;
+      return `<tr><td>${esc(r.tgl)}</td><td class="num">${s.n}${fmtDiff(s.n,q&&q.n,false)}</td>
+      <td class="num">${rp(s.out)}${fmtDiff(s.out,q&&q.out,false)}</td><td class="num">${rp(s.tung)}${fmtDiff(s.tung,q&&q.tung,true)}</td>
+      ${[1,2,3,4,5].map(c=>`<td class="num">${s.coll[c]}${fmtDiff(s.coll[c],q&&q.coll[c],c>=2)}</td>`).join('')}
+      <td class="num">${s.sudah} <span class="mut">(${s.n?Math.round(s.sudah*100/s.n):0}%)</span></td></tr>`}).join('')}
+    </table></div>
+    <h3 style="margin-top:14px">Perubahan pada upload terakhir (${esc(last.tgl)})</h3>
+    <p style="margin:6px 0">${ringkasDiff(last)}</p>
+    ${last.diff?tblDiff('Coll naik (memburuk)',last.diff.naik.rows,['Coll lama','Coll baru'],collLabel)
+      +tblDiff('Tunggakan bertambah',last.diff.tunggak.rows,['Lama','Baru'],rp)
+      +tblDiff('Coll turun (membaik)',last.diff.turun.rows,['Coll lama','Coll baru'],collLabel)
+      +tblDiff('Keluar dari daftar (lunas/hapus)',last.diff.keluar.rows,['Coll terakhir','Outstanding terakhir'],v=>typeof v==='number'&&v<=5?collLabel(v):rp(v))
+      +tblDiff('Rekening baru',last.diff.baru.rows,['Coll','Outstanding'],v=>typeof v==='number'&&v<=5?collLabel(v):rp(v)):''}
+    </div>`}).join('');
+  document.getElementById('content').innerHTML=`<div class="panel"><h3>📈 Riwayat Mingguan</h3>
+    <p class="mut" style="margin-bottom:10px">Ringkasan tiap upload disimpan otomatis, dan dibandingkan dengan upload sebelumnya untuk cabang yang sama. Riwayat tersimpan di perangkat yang dipakai upload.</p>
+    <div class="toolbar"><button class="btn-s" onclick="backupAll()">💾 Backup laporan & riwayat (JSON)</button></div></div>`+body;
+}
+function backupAll(){
+  const blob=new Blob([JSON.stringify({dibuat:new Date().toISOString(),laporan:LAP,riwayat:RIWAYAT})],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-kopena-'+todayISO()+'.json';
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
 }
 function resetSample(){if(confirm('Kembali ke data contoh? Data upload akan hilang.')){DATA=JSON.parse(JSON.stringify(SAMPLE_DATA));jsave(K.data,DATA);notify('Data contoh dimuat ulang ✔')}}
 function parseXMLSpreadsheet(text){
@@ -680,7 +768,7 @@ function pgAO(){
 }
 function setAO(a,user){
   if(user)AOMAP[a]=user;else delete AOMAP[a];
-  jsave(K.aomap,AOMAP);notify('Pembagian AO "'+a+'" diperbarui ✔');syncPush('aomap',true);pgAO();
+  jsave(K.aomap,AOMAP);syncPush('aomap',true);notify('Pembagian AO "'+a+'" diperbarui ✔');pgAO();
 }
 function autoMatchAO(){
   let n=0;
@@ -690,7 +778,7 @@ function autoMatchAO(){
     const match=aos.find(a=>!AOMAP[a]&&(a.toUpperCase().includes(u.nama.toUpperCase())||u.nama.toUpperCase().includes(a.toUpperCase())));
     if(match){AOMAP[match]=u.user;n++}
   });
-  jsave(K.aomap,AOMAP);syncPush('aomap',true);
+  jsave(K.aomap,AOMAP);if(n)syncPush('aomap',true);
   notify(n?n+' AO otomatis dikaitkan ✔':'Tidak ada kecocokan otomatis — pilih manual',n>0);pgAO();
 }
 /* ================= KELOLA AKUN (ADMIN) ================= */
@@ -750,6 +838,8 @@ function delUser(u){if(confirm('Hapus akun '+u+'?')){users=users.filter(x=>x.use
    Kosongkan SYNC_URL jika ingin mode offline (data lokal saja). */
 const SYNC_URL='https://script.google.com/macros/s/AKfycbwkK44P8Alh3Q6VQC4_UsREWWmqsFTHoxc4bC6UjWUqtS2squXoCoxQlF8_jpxKWJ8r/exec';
 const SYNC_SECRET='kopena-sync-2026';
+/* Foto kunjungan ikut dikirim ke server? false = hanya teks (foto tetap di HP pembuat laporan). Ubah ke true hanya jika server sudah memecah data besar. */
+const SYNC_FOTO=false;
 let SYNC_INFO=null;
 function syncScope(){return (SES&&SES.cabang)||'all'}
 async function syncGet(){
@@ -766,32 +856,30 @@ async function syncSend(kind,records){
 }
 async function syncPull(manual){
   if(!SYNC_URL){if(manual)notify('URL server belum diisi (SYNC_URL)',false);return}
+  /* Admin Pusat adalah sumber data: pull otomatis hanya mengambil laporan, supaya data/akun/AO yang belum terkirim tidak tertimpa. Tombol manual mengambil semuanya. */
+  const full=manual||!(SES&&SES.role==='admin'&&syncScope()==='all');
   try{
     const j=await syncGet();
     if(!j.ok)throw new Error(j.error||'server menolak');
-    const adminPusat=SES.role==='admin'&&syncScope()==='all';
+    if(full&&Array.isArray(j.data)){
+      if(syncScope()==='all'){DATA=j.data}
+      else{DATA=DATA.filter(d=>cabOf(d)!==syncScope()).concat(j.data.filter(d=>cabOf(d)===syncScope()))}
+      DATA.forEach(d=>d.sudah_angsur=sudahAngsur(d));
+      jsave(K.data,DATA);
+    }
     if(Array.isArray(j.laporan)){
-      const map={};LAP.forEach(l=>map[l.id]=l);j.laporan.forEach(l=>{l.foto=null;map[l.id]=l;});
+      const map={};LAP.forEach(l=>map[l.id]=l);j.laporan.forEach(l=>{const o=map[l.id];map[l.id]=(o&&o.foto&&!l.foto)?Object.assign({},l,{foto:o.foto}):l});
       LAP=Object.values(map);jsave(K.lap,LAP);
     }
-    if(adminPusat){
-      // Pusat: jangan timpa data/users/aomap lokal (sumber kebenaran ada di sini)
-    }else{
-      if(Array.isArray(j.data)){
-        DATA=DATA.filter(d=>cabOf(d)!==syncScope()).concat(j.data.filter(d=>cabOf(d)===syncScope()));
-        DATA.forEach(d=>d.sudah_angsur=sudahAngsur(d));
-        jsave(K.data,DATA);
-      }
-      if(Array.isArray(j.users)&&j.users.length){
-        users=j.users.filter(u=>u.user!=='admin');
-        users.unshift({nama:'Administrator',user:'admin',pass:'admin123',role:'admin',cabang:'all'});
-        jsave(K.users,users);
-      }
-      if(j.aomap&&typeof j.aomap==='object'){AOMAP=j.aomap;jsave(K.aomap,AOMAP)}
-      if(Array.isArray(j.cabangs)&&j.cabangs.length){CABANGS=j.cabangs;jsave(KCAB,CABANGS)}
+    if(full&&Array.isArray(j.users)&&j.users.length){
+      users=j.users.filter(u=>u.user!=='admin');
+      users.unshift({nama:'Administrator',user:'admin',pass:'admin123',role:'admin',cabang:'all'});
+      jsave(K.users,users);
     }
+    if(full&&j.aomap&&typeof j.aomap==='object'){AOMAP=j.aomap;jsave(K.aomap,AOMAP)}
+    if(full&&Array.isArray(j.cabangs)&&j.cabangs.length){CABANGS=j.cabangs;jsave(KCAB,CABANGS)}
     SYNC_INFO=j.updatedAt;
-    go(PAGE||'home');
+    if(manual||!['lap','up'].includes(PAGE))go(PAGE||'home');
     if(manual)notify('Sinkronisasi berhasil ✔ data terbaru dimuat');
   }catch(err){if(manual)notify('Gagal tarik data: '+err.message,false)}
 }
@@ -799,12 +887,12 @@ async function syncPush(kind,quiet){
   if(!SYNC_URL){if(!quiet)notify('URL server belum diisi (SYNC_URL)',false);return}
   let records,msg;
   if(kind==='data'){records=syncScope()==='all'?DATA:DATA.filter(inCabang);msg='data '+records.length+' rekening'+(syncScope()==='all'?' (semua cabang)':' cabang '+syncScope())}
-  else if(kind==='laporan'){records=LAP.map(l=>Object.assign({},l,{foto:null}));msg='laporan '+records.length+' catatan (foto tetap di HP)'}
-  else if(kind==='users'){if(syncScope()!=='all'){notify('Hanya akun Pusat yang boleh mengirim daftar akun',false);return}records=users;msg='daftar akun'}
-  else if(kind==='aomap'){if(syncScope()!=='all'){notify('Hanya akun Pusat',false);return}records=AOMAP;msg='pemetaan AO'}
+  else if(kind==='laporan'){records=SYNC_FOTO?LAP:LAP.map(l=>l.foto?Object.assign({},l,{foto:null,fotoAda:true}):l);msg='laporan '+records.length+' catatan'}
+  else if(kind==='users'){if(syncScope()!=='all'){if(!quiet)notify('Hanya akun Pusat yang boleh mengirim daftar akun',false);return}records=users;msg='daftar akun'}
+  else if(kind==='aomap'){if(syncScope()!=='all'){if(!quiet)notify('Hanya akun Pusat',false);return}records=AOMAP;msg='pemetaan AO'}
   else if(kind==='cabangs'){records=CABANGS;msg='daftar cabang'}
   const r=await syncSend(kind,records);
-  if(!r.ok||!quiet)notify(r.ok?'✓ Terkirim ke server: '+msg:'✗ Gagal kirim: '+r.error,r.ok);
+  if(!r.ok||!quiet)notify(r.ok?'✓ Terkirim ke server: '+msg:'✗ Gagal kirim ('+msg+'): '+r.error,r.ok);
   return r.ok;
 }
 function pgSync(){
