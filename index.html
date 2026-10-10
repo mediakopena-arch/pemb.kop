@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KoperasiKu - Sistem Tagihan Mitra Usaha</title>
@@ -359,6 +360,12 @@ function pgLap(){
       <div><label>Nominal (Rp, jika ada)</label><input type="number" id="lpNom" value="0" min="0"></div>
     </div>
     <label>Catatan</label><textarea id="lpCat" rows="2" placeholder="Contoh: janji bayar tanggal 15, atau sudah transfer Rp 500.000"></textarea>
+    <div style="margin-top:12px">
+      <input type="file" id="lpFotoInput" accept="image/*" capture="environment" style="display:none" onchange="prosesFoto(event)">
+      <button class="btn-s" type="button" onclick="pilihFoto()">📷 Foto Kunjungan (opsional)</button>
+      <span id="lpFotoPrev" style="margin-left:8px;display:inline-block;vertical-align:middle"></span>
+      <div id="lpFotoInfo" class="mut" style="margin-top:6px"></div>
+    </div>
     <button class="btn-p" style="width:auto;margin-top:14px" onclick="saveLap()">💾 Simpan Laporan</button>
   </div>
   <div class="panel"><h3>Riwayat Laporan</h3>
@@ -367,6 +374,9 @@ function pgLap(){
       <select id="fUser" onchange="renderLapList()"><option value="">Semua Petugas</option>
         ${[...new Set(LAP.map(l=>l.petugas))].map(u=>`<option>${esc(u)}</option>`).join('')}</select>
       <input placeholder="cari nama / rekening..." id="fQ" onkeyup="renderLapList()">
+      <button class="btn-a" onclick="cetakLaporanHarian()">🖨️ PDF</button>
+      <button class="btn-a" onclick="exportLaporanGambar()">🖼 Gambar</button>
+      <button class="btn-a" onclick="krmLaporanWA()">📤 WhatsApp</button>
     </div>
     <div id="lapList"></div>
   </div>`;
@@ -402,10 +412,13 @@ function saveLap(){
     hasil:document.getElementById('lpHasil').value,
     nominal:parseFloat(document.getElementById('lpNom').value||0),
     catatan:document.getElementById('lpCat').value.trim(),
-    petugas:SES.nama
+    petugas:SES.nama,
+    foto:lpFoto, waktuFoto:lpWaktu, lokasi:lpLokasi
   });
-  jsave(K.lap,LAP);notify('Laporan tersimpan ✔');
+  if(!jsaveLap())alert('Penyimpanan HP hampir penuh — laporan tersimpan TANPA FOTO. Segera export/cetak laporan lalu bersihkan riwayat lama.');
+  notify('Laporan tersimpan ✔');
   syncPush('laporan',true);
+  lpFoto=null;lpWaktu=null;lpLokasi=null;
   document.getElementById('lpCat').value='';document.getElementById('lpNom').value=0;
   pgLap();
 }
@@ -416,10 +429,10 @@ function renderLapList(){
   if(SES.role!=='admin')u=SES.nama;
   let rows=LAP.filter(l=>(!t||l.tanggalISO===t)&&(!u||l.petugas===u)&&(!q||l.nama.toLowerCase().includes(q)||l.rekening.includes(q)));
   document.getElementById('lapList').innerHTML=rows.length?`<table>
-   <tr><th>Tanggal</th><th>Rekening</th><th>Nasabah</th><th>Hasil Call</th><th class="r">Nominal</th><th>Catatan</th><th>Petugas</th><th></th></tr>
+   <tr><th>Tanggal</th><th>Rekening</th><th>Nasabah</th><th>Hasil Call</th><th class="r">Nominal</th><th>Foto & Lokasi</th><th>Petugas</th><th></th></tr>
    ${rows.map(l=>`<tr><td>${esc(l.tanggal)}</td><td>${l.rekening}</td><td>${esc(l.nama)}</td>
-     <td>${esc(l.hasil)}</td><td class="num">${l.nominal?rp(l.nominal):'-'}</td>
-     <td>${esc(l.catatan)}</td><td>${esc(l.petugas)}</td>
+     <td>${esc(l.hasil)}${l.catatan?`<br><span class='mut'>${esc(l.catatan)}</span>`:''}</td><td class="num">${l.nominal?rp(l.nominal):'-'}</td>
+     <td>${l.foto?`<img src="${l.foto}" style="max-height:46px;border-radius:6px;border:1px solid var(--line)"><br>`:'<span class="mut">tanpa foto</span>'}<span class="mut" style="font-size:11px">${metaLap(l)}</span></td><td>${esc(l.petugas)}</td>
      <td>${(SES.role==='admin'||l.petugas===SES.nama)?`<button class="btn-d" onclick="delLap(${l.id})">✕</button>`:''}</td></tr>`).join('')}</table>`
    :'<p class="mut">Belum ada laporan untuk filter ini.</p>';
 }
@@ -869,6 +882,112 @@ function installApp(){
   if(!deferredInstall){alert('Instalasi otomatis belum siap. Cara manual: buka menu \u22EE Chrome \u2192 pilih "Instal aplikasi" (atau "Tambah ke layar utama"). iPhone: tombol Share \u2192 "Add to Home Screen".');return}
   deferredInstall.prompt();
   deferredInstall.userChoice.then(()=>{deferredInstall=null;const b=document.getElementById('btnInstall');if(b)b.style.display='none'});
+}
+/* ================= FOTO KUNJUNGAN: KOMPRESI + TIMESTAMP + GEOTAG ================= */
+let lpFoto=null, lpWaktu=null, lpLokasi=null;
+function pilihFoto(){document.getElementById('lpFotoInput').click()}
+function prosesFoto(ev){
+  const f=ev.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      // kompresi otomatis: maks 800px, JPEG 60% (±60-120 KB per foto)
+      const M=800; let w=img.width,h=img.height;
+      if(Math.max(w,h)>M){const s=M/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s)}
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      lpFoto=c.toDataURL('image/jpeg',0.6);
+      lpWaktu=new Date().toISOString();
+      lpLokasi=null;
+      const tgl=new Date().toLocaleString('id-ID');
+      document.getElementById('lpFotoPrev').innerHTML='<img src="'+lpFoto+'" style="max-width:130px;border-radius:8px;border:1px solid var(--line);display:block;margin-top:6px">';
+      const info=document.getElementById('lpFotoInfo');
+      info.textContent='🕒 '+tgl+' · 📍 mencari lokasi...';
+      if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(p=>{
+          lpLokasi={lat:+p.coords.latitude.toFixed(6),lng:+p.coords.longitude.toFixed(6),acc:Math.round(p.coords.accuracy)};
+          info.textContent='🕒 '+tgl+' · 📍 '+lpLokasi.lat+', '+lpLokasi.lng+' (±'+lpLokasi.acc+'m)';
+        },()=>{info.textContent='🕒 '+tgl+' · 📍 lokasi tidak diizinkan';},{timeout:8000,maximumAge:60000});
+      }else info.textContent='🕒 '+tgl+' · 📍 perangkat tanpa GPS';
+    };
+    img.src=e.target.result;
+  };
+  rd.readAsDataURL(f);
+  ev.target.value='';
+}
+function metaLap(l){
+  let s=l.waktuFoto?('🕒 '+new Date(l.waktuFoto).toLocaleString('id-ID')):'';
+  if(l.lokasi)s+=' · 📍 '+l.lokasi.lat+', '+l.lokasi.lng+(l.lokasi.acc?' (±'+l.lokasi.acc+'m)':'');
+  return s||'-';
+}
+/* simpan laporan dengan pengaman kuota: buang foto lama bila penyimpanan penuh */
+function jsaveLap(){
+  try{jsave(K.lap,LAP);return true}catch(e){
+    for(let i=LAP.length-1;i>=0;i--){
+      if(LAP[i].foto){LAP[i].foto=null;
+        try{jsave(K.lap,LAP);return true}catch(e2){}}
+    }
+    return false;
+  }
+}
+function lapRowsFiltered(){
+  const t=document.getElementById('fTgl')?.value,q=(document.getElementById('fQ')?.value||'').toLowerCase();
+  let u=document.getElementById('fUser')?.value||'';
+  if(SES.role!=='admin')u=SES.nama;
+  return LAP.filter(l=>(!t||l.tanggalISO===t)&&(!u||l.petugas===u)&&(!q||l.nama.toLowerCase().includes(q)||l.rekening.includes(q)));
+}
+function lapTableHtml(rows){
+  return `<table>
+   <tr><th>Tanggal</th><th>Rekening</th><th>Nasabah</th><th>Hasil Call</th><th class="r">Nominal</th><th>Foto & Lokasi</th><th>Petugas</th></tr>
+   ${rows.map(l=>`<tr>
+     <td>${esc(l.tanggal)}</td><td>${l.rekening}</td><td>${esc(l.nama)}</td>
+     <td>${esc(l.hasil)}${l.catatan?'<br><i>'+esc(l.catatan)+'</i>':''}</td>
+     <td class="num">${l.nominal?rp(l.nominal):'-'}</td>
+     <td>${l.foto?'<img src="'+l.foto+'" style="max-height:70px">':'-'}<br><span style="font-size:8pt">${metaLap(l)}</span></td>
+     <td>${esc(l.petugas)}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center">Tidak ada laporan</td></tr>'}
+  </table>`;
+}
+function cetakLaporanHarian(){
+  const rows=lapRowsFiltered();
+  const tgl=new Date().toLocaleString('id-ID');
+  printInit('Laporan Harian Call — KOPENA',`Dicetak ${tgl} · ${rows.length} laporan`);
+  document.getElementById('printArea').innerHTML+=lapTableHtml(rows);
+  window.print();
+}
+function lapReportNode(){
+  const rows=lapRowsFiltered();
+  const w=document.createElement('div');
+  w.style.cssText='position:fixed;left:-9999px;top:0;width:800px;background:#fff;color:#000;padding:16px;font-family:Arial';
+  w.innerHTML=`<h1 style="font-size:15px;margin:0 0 2px">Laporan Harian Call — KOPENA</h1>
+    <div style="font-size:10px;color:#444;margin-bottom:10px">Diekspor ${new Date().toLocaleString('id-ID')} · ${rows.length} laporan</div>
+    <style>table{width:100%%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #999;padding:4px 6px;text-align:left}th{background:#eee}td.num{text-align:right}</style>`+lapTableHtml(rows);
+  document.body.appendChild(w);
+  return w;
+}
+async function exportLaporanGambar(){
+  if(typeof html2canvas==='undefined'){alert('Fitur gambar butuh koneksi internet (pustaka dimuat dari CDN). PDF tetap bisa tanpa internet.');return}
+  const w=lapReportNode();
+  try{
+    const canvas=await html2canvas(w,{backgroundColor:'#ffffff',scale:2});
+    const a=document.createElement('a');
+    a.download='laporan-call-kopena.png';
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  }catch(err){alert('Gagal membuat gambar: '+err.message)}
+  finally{document.body.removeChild(w)}
+}
+function krmLaporanWA(){
+  const rows=lapRowsFiltered();
+  let msg='*LAPORAN HARIAN CALL — KOPENA*\n';
+  msg+='Tanggal: '+(document.getElementById('fTgl')?.value||'-')+'\n';
+  msg+='Jumlah: '+rows.length+' laporan\n\n';
+  rows.slice(0,30).forEach((l,i)=>{
+    msg+=(i+1)+'. '+l.nama+' ('+l.rekening+')\n   '+l.hasil+(l.nominal?' — '+rp(l.nominal):'')+(l.lokasi?'\n   📍 '+l.lokasi.lat+', '+l.lokasi.lng:'')+'\n';
+  });
+  if(rows.length>30)msg+='...dan '+(rows.length-30)+' laporan lainnya\n';
+  msg+='\n_Foto kunjungan terlampir di aplikasi / ekspor gambar._';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 }
 /* ================= INIT ================= */
 if(SES&&users.find(x=>x.user===SES.user))showApp();
