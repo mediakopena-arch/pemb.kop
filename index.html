@@ -176,7 +176,7 @@ function addCabang(){
 }
 function delCabang(k){
   if(!confirm('Hapus cabang '+k+' dari daftar?'))return;
-  CABANGS=CABANGS.filter(c=>c.kode!==k);jsave(KCAB,CABANGS);pgUsr();
+  CABANGS=CABANGS.filter(c=>c.kode!==k);jsave(KCAB,CABANGS);syncPush('cabangs',true);pgUsr();
 }
 /* Rumus status angsur — sama persis dengan aplikasi tungcab:
    pembayaran_pokok = kolom 11 ("Tagihan Aktif Margin"), pembayaran_margin = kolom 12 ("Tagihan Masuk Pokok").
@@ -248,7 +248,14 @@ function showApp(){
   document.getElementById('chipName').textContent=SES.nama;
   document.getElementById('chipRole').textContent='· '+(SES.role==='admin'?'Admin':'Petugas')+(myCabang()==='all'?' · 🏛️ Pusat':' · 🏢 '+myCabang());
   renderMenu();go('home');
-  if(SYNC_URL)syncPull(false);
+  if(SYNC_URL){
+    syncPull(false);
+    setInterval(()=>{
+      if(!SES||document.hidden)return;
+      if(PAGE==='lap')return;  // jangan ganggu form yang sedang diisi
+      syncPull(false);
+    },120000);
+  }
   document.getElementById('lgPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 }
 document.getElementById('lgPass')?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
@@ -673,7 +680,7 @@ function pgAO(){
 }
 function setAO(a,user){
   if(user)AOMAP[a]=user;else delete AOMAP[a];
-  jsave(K.aomap,AOMAP);notify('Pembagian AO "'+a+'" diperbarui ✔');pgAO();
+  jsave(K.aomap,AOMAP);notify('Pembagian AO "'+a+'" diperbarui ✔');syncPush('aomap',true);pgAO();
 }
 function autoMatchAO(){
   let n=0;
@@ -683,7 +690,7 @@ function autoMatchAO(){
     const match=aos.find(a=>!AOMAP[a]&&(a.toUpperCase().includes(u.nama.toUpperCase())||u.nama.toUpperCase().includes(a.toUpperCase())));
     if(match){AOMAP[match]=u.user;n++}
   });
-  jsave(K.aomap,AOMAP);
+  jsave(K.aomap,AOMAP);syncPush('aomap',true);
   notify(n?n+' AO otomatis dikaitkan ✔':'Tidak ada kecocokan otomatis — pilih manual',n>0);pgAO();
 }
 /* ================= KELOLA AKUN (ADMIN) ================= */
@@ -722,17 +729,17 @@ function saveUser(){
     if(k==='all'||CABANGS.some(c=>c.kode===k)){notify('Kode cabang sudah terdaftar',false);return}
     const nm=(prompt('Nama cabang (huruf kapital, contoh: LIMPUNG):')||'').trim().toUpperCase();
     if(!nm){notify('Nama cabang wajib diisi',false);return}
-    CABANGS.push({kode:k,nama:nm});jsave(KCAB,CABANGS);cb=k;
+    CABANGS.push({kode:k,nama:nm});jsave(KCAB,CABANGS);syncPush('cabangs',true);cb=k;
     notify('Cabang '+k+' — '+nm+' ditambahkan ✔');
   }
   if(!n||!u||!p){notify('Lengkapi semua field!',false);return}
   if(r==='petugas'&&cb==='all'){notify('Akun Petugas/AO harus dipilih cabangnya!',false);return}
   if(users.find(x=>x.user===u)){notify('Username sudah dipakai!',false);return}
-  users.push({nama:n,user:u,pass:p,role:r,cabang:cb});jsave(K.users,users);
+  users.push({nama:n,user:u,pass:p,role:r,cabang:cb});jsave(K.users,users);syncPush('users',true);
   document.getElementById('mdlUser').style.display='none';
   nuNama.value=nuUser.value=nuPass.value='';notify('Akun dibuat ✔');pgUsr();
 }
-function delUser(u){if(confirm('Hapus akun '+u+'?')){users=users.filter(x=>x.user!==u);jsave(K.users,users);pgUsr()}}
+function delUser(u){if(confirm('Hapus akun '+u+'?')){users=users.filter(x=>x.user!==u);jsave(K.users,users);syncPush('users',true);pgUsr()}}
 
 /* ================= SINKRONISASI SERVER (Google Apps Script + Google Sheet) =================
    CARA PASANG (sekali saja, dikerjakan Pusat):
@@ -762,23 +769,27 @@ async function syncPull(manual){
   try{
     const j=await syncGet();
     if(!j.ok)throw new Error(j.error||'server menolak');
-    if(Array.isArray(j.data)){
-      if(syncScope()==='all'){DATA=j.data}
-      else{DATA=DATA.filter(d=>cabOf(d)!==syncScope()).concat(j.data.filter(d=>cabOf(d)===syncScope()))}
-      DATA.forEach(d=>d.sudah_angsur=sudahAngsur(d));
-      jsave(K.data,DATA);
-    }
+    const adminPusat=SES.role==='admin'&&syncScope()==='all';
     if(Array.isArray(j.laporan)){
-      const map={};LAP.forEach(l=>map[l.id]=l);j.laporan.forEach(l=>map[l.id]=l);
+      const map={};LAP.forEach(l=>map[l.id]=l);j.laporan.forEach(l=>{l.foto=null;map[l.id]=l;});
       LAP=Object.values(map);jsave(K.lap,LAP);
     }
-    if(Array.isArray(j.users)&&j.users.length){
-      users=j.users.filter(u=>u.user!=='admin');
-      users.unshift({nama:'Administrator',user:'admin',pass:'admin123',role:'admin',cabang:'all'});
-      jsave(K.users,users);
+    if(adminPusat){
+      // Pusat: jangan timpa data/users/aomap lokal (sumber kebenaran ada di sini)
+    }else{
+      if(Array.isArray(j.data)){
+        DATA=DATA.filter(d=>cabOf(d)!==syncScope()).concat(j.data.filter(d=>cabOf(d)===syncScope()));
+        DATA.forEach(d=>d.sudah_angsur=sudahAngsur(d));
+        jsave(K.data,DATA);
+      }
+      if(Array.isArray(j.users)&&j.users.length){
+        users=j.users.filter(u=>u.user!=='admin');
+        users.unshift({nama:'Administrator',user:'admin',pass:'admin123',role:'admin',cabang:'all'});
+        jsave(K.users,users);
+      }
+      if(j.aomap&&typeof j.aomap==='object'){AOMAP=j.aomap;jsave(K.aomap,AOMAP)}
+      if(Array.isArray(j.cabangs)&&j.cabangs.length){CABANGS=j.cabangs;jsave(KCAB,CABANGS)}
     }
-    if(j.aomap&&typeof j.aomap==='object'){AOMAP=j.aomap;jsave(K.aomap,AOMAP)}
-    if(Array.isArray(j.cabangs)&&j.cabangs.length){CABANGS=j.cabangs;jsave(KCAB,CABANGS)}
     SYNC_INFO=j.updatedAt;
     go(PAGE||'home');
     if(manual)notify('Sinkronisasi berhasil ✔ data terbaru dimuat');
@@ -788,12 +799,12 @@ async function syncPush(kind,quiet){
   if(!SYNC_URL){if(!quiet)notify('URL server belum diisi (SYNC_URL)',false);return}
   let records,msg;
   if(kind==='data'){records=syncScope()==='all'?DATA:DATA.filter(inCabang);msg='data '+records.length+' rekening'+(syncScope()==='all'?' (semua cabang)':' cabang '+syncScope())}
-  else if(kind==='laporan'){records=LAP;msg='laporan '+records.length+' catatan'}
+  else if(kind==='laporan'){records=LAP.map(l=>Object.assign({},l,{foto:null}));msg='laporan '+records.length+' catatan (foto tetap di HP)'}
   else if(kind==='users'){if(syncScope()!=='all'){notify('Hanya akun Pusat yang boleh mengirim daftar akun',false);return}records=users;msg='daftar akun'}
   else if(kind==='aomap'){if(syncScope()!=='all'){notify('Hanya akun Pusat',false);return}records=AOMAP;msg='pemetaan AO'}
   else if(kind==='cabangs'){records=CABANGS;msg='daftar cabang'}
   const r=await syncSend(kind,records);
-  if(!quiet)notify(r.ok?'✓ Terkirim ke server: '+msg:'✗ Gagal kirim: '+r.error,r.ok);
+  if(!r.ok||!quiet)notify(r.ok?'✓ Terkirim ke server: '+msg:'✗ Gagal kirim: '+r.error,r.ok);
   return r.ok;
 }
 function pgSync(){
