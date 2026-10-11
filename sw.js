@@ -1,5 +1,5 @@
-/* KoperasiKu Service Worker — cache app shell agar bisa offline & dapat di-Instal */
-const CACHE = 'koperasiku-v1';
+/* KoperasiKu Service Worker ΓÇö cache app shell agar bisa offline & dapat di-Instal */
+const CACHE = 'koperasiku-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -11,7 +11,7 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Jangan sentuh permintaan ke server sinkron / lintas domain — biarkan lewat
+  // Jangan sentuh permintaan ke server sinkron / lintas domain ΓÇö biarkan lewat
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   // HTML selalu coba jaringan dulu (update cepat), fallback ke cache saat offline
   if (e.request.mode === 'navigate') {
