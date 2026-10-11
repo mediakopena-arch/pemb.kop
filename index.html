@@ -206,7 +206,11 @@ const rp=n=>'Rp '+(n||0).toLocaleString('id-ID');
 const collLabel=c=>({0:'Lancar',1:'Lancar',2:'DPK',3:'Kurang Lancar',4:'Diragukan',5:'Macet'})[c]||('Coll '+c);
 const collClass=c=>'b'+Math.min(5,Math.max(1,c||1));
 const esc=s=>String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
-const todayISO=()=>new Date().toISOString().slice(0,10);
+const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+/* Kolom tanggal yang masih berisi nilai otomatis ikut diperbarui saat aplikasi dibuka lagi di hari berikutnya */
+function refreshTgl(){['lpTgl','fTgl','upTgl'].forEach(id=>{const el=document.getElementById(id);if(el&&el.dataset.auto&&el.value===el.dataset.auto&&el.dataset.auto!==todayISO()){el.value=el.dataset.auto=todayISO();if(id==='fTgl'&&typeof renderLapList==='function')renderLapList()}})}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshTgl()});
+setInterval(refreshTgl,60000);
 const tglNow=()=>new Date().toLocaleDateString('id-ID');
 
 /* ================= AUTH ================= */
@@ -267,7 +271,7 @@ function getMenus(){
  {id:'lap',t:'📋 Laporan Harian'},
  {id:'out',t:'💰 Daftar Outstanding'},
  {id:'pinj',t:'📑 Pinjaman & Kondisi Call'},
- ...(SES&&SES.role==='admin'?[{id:'up',t:'⬆️ Upload Data'},{id:'rw',t:'📈 Riwayat Mingguan'}]:[]),
+ ...(SES&&SES.role==='admin'?[{id:'up',t:'⬆️ Upload Data'},{id:'rw',t:'📈 Riwayat Mingguan'},{id:'ars',t:'🗄️ Arsip Upload'}]:[]),
  {id:'rpt',t:'🖨️ Laporan'},
  {id:'sync',t:'🔄 Sinkronisasi'},
  ...(SES&&SES.role==='admin'?[{id:'ao',t:'👥 Pembagian Data AO'},{id:'usr',t:'⚙️ Kelola Akun'}]:[])
@@ -283,7 +287,7 @@ function go(id){
   PAGE=id;
   document.querySelectorAll('nav a, .mnav a').forEach(a=>a.classList.toggle('active',a.dataset.id===id));
   document.getElementById('pageTitle').textContent=getMenus().find(m=>m.id===id)?.t.replace(/^[^ ]+ /,'')||'';
-  ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,rpt:pgRpt,sync:pgSync,ao:pgAO,usr:pgUsr,rw:pgRw})[id]();
+  ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,rpt:pgRpt,sync:pgSync,ao:pgAO,usr:pgUsr,rw:pgRw,ars:pgArs})[id]();
   window.scrollTo(0,0);
 }
 function notify(t,ok=true){const n=document.getElementById('notif');n.className='notif '+(ok?'ok':'bad');n.textContent=t;setTimeout(()=>n.className='notif',3500)}
@@ -354,7 +358,7 @@ function pgLap(){
   document.getElementById('content').innerHTML=`
   <div class="panel"><h3>Input Laporan Call Harian ${SES.role==='admin'?'':'<span class="mut">(data nasabah Anda)</span>'}</h3>
     <div class="rowflex">
-      <div><label>Tanggal</label><input type="date" id="lpTgl" value="${tgl}"></div>
+      <div><label>Tanggal</label><input type="date" id="lpTgl" value="${tgl}" data-auto="${tgl}"></div>
       <div style="flex:2;min-width:220px;position:relative"><label>Nasabah — ketik nama / rekening</label>
         <input id="lpRek" placeholder="ketik min. 2 huruf, lalu pilih..." autocomplete="off"
           oninput="saranNasabah()" onblur="setTimeout(()=>document.getElementById('lpSaran').style.display='none',150)">
@@ -376,7 +380,7 @@ function pgLap(){
   </div>
   <div class="panel"><h3>Riwayat Laporan</h3>
     <div class="toolbar">
-      <input type="date" id="fTgl" value="${tgl}" onchange="renderLapList()">
+      <input type="date" id="fTgl" value="${tgl}" data-auto="${tgl}" onchange="renderLapList()">
       <select id="fUser" onchange="renderLapList()"><option value="">Semua Petugas</option>
         ${[...new Set([...users.filter(u=>u.role==='petugas').map(u=>u.nama),...LAP.map(l=>l.petugas)])].sort().map(u=>`<option>${esc(u)}</option>`).join('')}</select>
       <input placeholder="cari nama / rekening..." id="fQ" onkeyup="renderLapList()">
@@ -570,12 +574,17 @@ function renderPinj(){
 function pgUp(){
   document.getElementById('content').innerHTML=`
   <div class="panel"><h3>Upload Data Tagihan (format .XLS XML Spreadsheet)</h3>
-    <p class="mut" style="margin-bottom:12px">Unggah file hasil ekspor sistem seperti contoh (format Excel XML 2003). Data lama akan <b>diganti</b> oleh data baru. Admin Pusat dapat mengupload file dari cabang mana pun (otomatis tertanda cabangnya); admin cabang hanya bisa upload file cabangnya sendiri. Status Sudah/Belum angsur dihitung otomatis persis seperti aplikasi lama (kolom "Tagihan Aktif Margin" atau "Tagihan Masuk Pokok" bernilai di atas nol). Setelah upload, data <b>otomatis terbagi per AO</b> berdasarkan kolom "Nama AO" — admin tinggal mengaitkan tiap AO ke akun petugas di menu <b>Pembagian Data AO</b>.</p>
+    <p class="mut" style="margin-bottom:12px">Unggah file hasil ekspor sistem seperti contoh (format Excel XML 2003). Data aktif cabang tersebut akan <b>diganti</b> oleh data baru, tetapi versi sebelumnya tetap aman di <b>Arsip Upload</b>. Admin Pusat dapat mengupload file dari cabang mana pun (otomatis tertanda cabangnya); admin cabang hanya bisa upload file cabangnya sendiri. Status Sudah/Belum angsur dihitung otomatis persis seperti aplikasi lama (kolom "Tagihan Aktif Margin" atau "Tagihan Masuk Pokok" bernilai di atas nol). Setelah upload, data <b>otomatis terbagi per AO</b> berdasarkan kolom "Nama AO" — admin tinggal mengaitkan tiap AO ke akun petugas di menu <b>Pembagian Data AO</b>.</p>
+    <div class="toolbar" style="align-items:flex-end">
+      <div><label>Tanggal data (sesuai isi file)</label><input type="date" id="upTgl" value="${todayISO()}" data-auto="${todayISO()}"></div>
+    </div>
     <div class="toolbar">
       <input type="file" id="upFile" accept=".xls,.xml">
       <button class="btn-p" style="width:auto;margin:0" onclick="doUpload()">📤 Proses Upload</button>
       <button class="btn-s" onclick="resetSample()">↺ Muat Ulang Data Contoh</button>
     </div>
+    <label style="display:block;margin:6px 0"><input type="checkbox" id="upDl" checked> Unduh juga salinan file ke perangkat ini (arsip cadangan di luar aplikasi)</label>
+    <p class="mut" style="margin-bottom:8px">Setiap upload otomatis diarsipkan dengan penanda <b>cabang + tanggal data</b>. Upload dengan cabang dan tanggal yang sama akan <b>ditanyakan dulu</b> sebelum menimpa arsip lama. Lihat di menu <b>Arsip Upload</b>.</p>
     <div id="upMsg"></div>
     <p class="mut" style="margin-top:14px">Kolom yang dibaca: No. Rekening, Nama, Plafond, Outstanding, Coll, Tunggakan Awal (Pokok/Margin/Bln), Tagihan Aktif (Pokok/Margin), Tagihan Masuk (Pokok/Margin), Tunggakan Akhir (Pokok/Bln), Tgl JT, Nama AO, serta grup produk (mis. 541 / PEMBIAYAAN MURABAHAH ANGSURAN).</p>
   </div>`;
@@ -584,7 +593,7 @@ function doUpload(){
   const f=document.getElementById('upFile').files[0];
   if(!f){notify('Pilih file dulu!',false);return}
   const rd=new FileReader();
-  rd.onload=e=>{
+  rd.onload=async e=>{
     try{
       const rows=parseXMLSpreadsheet(e.target.result);
       if(!rows.length)throw new Error('Tidak ada baris data ditemukan. Pastikan format file sama dengan contoh.');
@@ -596,22 +605,99 @@ function doUpload(){
       }
       rows.forEach(d=>d.sudah_angsur=sudahAngsur(d));
       const cabs=new Set(rows.map(cabOf));
+      const tglData=(document.getElementById('upTgl')||{}).value||todayISO();
+      for(const cb of cabs){
+        const ada=await arsipGet(cb+'|'+tglData).catch(()=>null);
+        if(ada&&!confirm('Arsip cabang '+cb+' untuk tanggal data '+tglData+' SUDAH ADA ('+ada.n+' rekening, diupload '+new Date(ada.savedAt).toLocaleString('id-ID')+').\n\nTimpa arsip lama dengan file ini?\n\nOK = timpa   |   Batal = batalkan upload (jika file ini untuk tanggal lain, ubah dulu kolom Tanggal data)')){
+          document.getElementById('upMsg').innerHTML='<div class="notif bad">Upload dibatalkan — arsip cabang '+esc(cb)+' tanggal '+esc(tglData)+' tidak diubah. Data aktif juga tidak berubah.</div>';return}
+      }
       const isSample=DATA.length===SAMPLE_DATA.length&&DATA[0]&&DATA[0].rekening===SAMPLE_DATA[0].rekening;
       const old=isSample?[]:DATA.filter(d=>cabs.has(cabOf(d)));
       const df=old.length?diffRows(old,rows):null;
       DATA=(isSample?[]:DATA.filter(d=>!cabs.has(cabOf(d)))).concat(rows);
       jsave(K.data,DATA);
-      cabs.forEach(cb=>saveRiwayat(cb,rows.filter(r=>cabOf(r)===cb),df));
+      cabs.forEach(cb=>saveRiwayat(cb,rows.filter(r=>cabOf(r)===cb),df,tglData));
+      let arsipMsg='';
+      try{for(const cb of cabs){const rr=rows.filter(r=>cabOf(r)===cb);
+        await arsipPut({key:cb+'|'+tglData,cab:cb,nama:rr[0].cabang_nama||cb,tgl:tglData,savedAt:new Date().toISOString(),file:f.name,n:rr.length,rows:rr})}
+        arsipMsg='🗄️ Diarsipkan: cabang '+[...cabs].join(', ')+' • tanggal data '+tglData;
+      }catch(err){arsipMsg='⚠ Arsip GAGAL tersimpan di aplikasi ('+err.message+'). Gunakan salinan unduhan.'}
+      if(SYNC_URL){for(const cb of cabs){const rr=rows.filter(r=>cabOf(r)===cb);
+        const r=await syncSend('arsip',{cab:cb,tgl:tglData,nama:rr[0].cabang_nama||cb,file:f.name,rows:rr});
+        if(r.ok&&r.res&&r.res.arsip){arsipMsg+=' • ☁️ Google Drive: '+r.res.arsip.name;
+          const o=await arsipGet(cb+'|'+tglData).catch(()=>null);if(o){o.drive=true;await arsipPut(o).catch(()=>{})}}
+        else arsipMsg+=' • ⚠ Drive BELUM tersimpan ('+cb+'): '+(r.ok?'server belum diperbarui (pasang Code.gs v3)':r.error)+' — kirim ulang dari menu Arsip Upload'}}
+      if((document.getElementById('upDl')||{}).checked){
+        const nm='arsip-'+[...cabs].join('_')+'-'+tglData+(/\.(xls|xml)$/i.test(f.name)?f.name.slice(f.name.lastIndexOf('.')):'.xls');
+        const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([e.target.result],{type:'application/vnd.ms-excel'}));a.download=nm;
+        document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);arsipMsg+=' • salinan diunduh: '+nm}
       const nAO=new Set(rows.map(r=>r.ao)).size;
       document.getElementById('upMsg').innerHTML=`<div class="notif ok">✔ Berhasil! ${rows.length} rekening dimuat, <b>otomatis terbagi ke ${nAO} kelompok AO</b>. Lanjutkan di menu <b>Pembagian Data AO</b> untuk mengaitkan ke akun petugas.</div>`;
-      const rw=RIWAYAT.filter(r=>cabs.has(r.cabang)&&r.tgl===todayISO());
+      const rw=RIWAYAT.filter(r=>cabs.has(r.cabang)&&r.tgl===tglData);
       document.getElementById('upMsg').innerHTML+=rw.map(r=>`<div class="notif ok" style="display:block;margin-top:8px">📈 <b>${esc(r.cabang)} ${esc(r.nama)}</b> vs upload sebelumnya: ${ringkasDiff(r)}</div>`).join('')+'<p class="mut" style="margin-top:6px">Detail: menu <b>Riwayat Mingguan</b>.</p>';
+      document.getElementById('upMsg').innerHTML+='<div class="notif ok" style="display:block;margin-top:8px">'+esc(arsipMsg)+'</div>';
       notify('Data berhasil diupload ✔');
       syncPush('data',true);
     }catch(err){document.getElementById('upMsg').innerHTML=`<div class="notif bad">✖ Gagal: ${esc(err.message)}</div>`}
   };
   rd.readAsText(f);
 }
+/* ================= ARSIP UPLOAD (IndexedDB, kunci = cabang|tanggal data) ================= */
+function arsipDB(){return new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('IndexedDB tidak tersedia'));
+  const q=indexedDB.open('kop_arsip',1);q.onupgradeneeded=()=>q.result.createObjectStore('a',{keyPath:'key'});q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+async function arsipTx(mode,fn){const db=await arsipDB();return new Promise((res,rej)=>{const t=db.transaction('a',mode);const r=fn(t.objectStore('a'));t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error('transaksi dibatalkan'))})}
+const arsipPut=o=>arsipTx('readwrite',s=>s.put(o));
+const arsipGet=k=>arsipTx('readonly',s=>s.get(k));
+const arsipAll=()=>arsipTx('readonly',s=>s.getAll());
+const arsipDel=k=>arsipTx('readwrite',s=>s.delete(k));
+async function pgArs(){
+  document.getElementById('content').innerHTML='<div class="panel"><h3>🗄️ Arsip Upload</h3><p class="mut">Memuat…</p></div>';
+  let list=[];let err='';
+  try{list=(await arsipAll()).sort((a,b)=>a.tgl<b.tgl?1:a.tgl>b.tgl?-1:a.cab.localeCompare(b.cab))}catch(e){err=e.message}
+  if(PAGE!=='ars')return;
+  document.getElementById('content').innerHTML=`<div class="panel"><h3>🗄️ Arsip Upload</h3>
+  <p class="mut" style="margin-bottom:10px">Setiap upload tersimpan terpisah menurut <b>cabang + tanggal data</b>, jadi upload minggu atau bulan berikutnya tidak menimpa yang lama. Arsip ada di browser perangkat ini — simpan juga salinan unduhannya di tempat aman (Google Drive / flashdisk).</p>
+  ${err?`<div class="notif bad" style="display:block">⚠ ${esc(err)}</div>`:''}
+  ${list.length?`<div style="overflow-x:auto"><table><tr><th>Tanggal data</th><th>Cabang</th><th class="r">Rekening</th><th>Diupload</th><th>File asal</th><th>Drive</th><th></th></tr>
+  ${list.map(a=>`<tr><td><b>${esc(a.tgl)}</b></td><td>${esc(a.cab)} — ${esc(a.nama)}</td><td class="num">${a.n}</td><td>${esc(new Date(a.savedAt).toLocaleString('id-ID'))}</td><td class="mut">${esc(a.file||'')}</td><td>${a.drive?'☁️ ✔':`<button class="btn-s" data-k="${esc(a.key)}" onclick="arsipKirim(this.dataset.k)">☁️ Kirim</button>`}</td>
+    <td style="white-space:nowrap"><button class="btn-s" data-k="${esc(a.key)}" onclick="arsipUnduh(this.dataset.k)">⬇️ Unduh</button>
+    <button class="btn-a" data-k="${esc(a.key)}" onclick="arsipPulih(this.dataset.k)">↩️ Jadikan data aktif</button>
+    <button class="btn-d" data-k="${esc(a.key)}" onclick="arsipHapus(this.dataset.k)">✕</button></td></tr>`).join('')}</table></div>`:'<p class="mut">Belum ada arsip. Arsip dibuat otomatis setiap upload.</p>'}
+  <h3 style="margin-top:18px">☁️ Arsip di Google Drive</h3>
+  <p class="mut" style="margin:6px 0">Folder <b>Arsip KOPERASIKU</b> di Google Drive pemilik skrip. Tersedia dari perangkat mana pun.</p>
+  <div class="toolbar"><button class="btn-s" onclick="driveDaftar()">🔄 Muat daftar dari Drive</button></div>
+  <div id="drvList"></div>
+  </div>`;
+}
+async function arsipKirim(k){const a=await arsipGet(k);if(!a)return;
+  const r=await syncSend('arsip',{cab:a.cab,tgl:a.tgl,nama:a.nama,file:a.file,rows:a.rows});
+  if(r.ok&&r.res&&r.res.arsip){a.drive=true;await arsipPut(a);notify('Tersimpan di Google Drive ✔')}
+  else notify('Gagal ke Drive: '+(r.ok?'server belum diperbarui (pasang Code.gs v3)':r.error),false);
+  pgArs()}
+async function driveDaftar(){
+  const box=document.getElementById('drvList');box.innerHTML='<p class="mut">Memuat…</p>';
+  try{const res=await fetch(SYNC_URL+'?secret='+encodeURIComponent(SYNC_SECRET)+'&aksi=arsip',{cache:'no-store'});const j=await res.json();
+    if(!j.ok||!Array.isArray(j.arsip))throw new Error(j.error||'server belum diperbarui (pasang Code.gs v3)');
+    box.innerHTML=j.arsip.length?`<div style="overflow-x:auto"><table><tr><th>Tanggal data</th><th>Cabang</th><th>Nama file</th><th class="r">Ukuran</th><th></th></tr>
+    ${j.arsip.map(x=>`<tr><td><b>${esc(x.tgl)}</b></td><td>${esc(x.cab)}</td><td>${esc(x.name)}${x.lama?' <span class="badge b2">versi lama</span>':''}</td><td class="num">${Math.round(x.size/1024)} KB</td>
+    <td style="white-space:nowrap"><a href="${esc(x.url)}" target="_blank" rel="noopener">Buka di Drive</a>
+    <button class="btn-a" data-id="${esc(x.id)}" onclick="driveMuat(this.dataset.id)">↩️ Jadikan data aktif</button></td></tr>`).join('')}</table></div>`:'<p class="mut">Belum ada arsip di Drive.</p>'
+  }catch(err){box.innerHTML='<div class="notif bad" style="display:block">⚠ '+esc(err.message)+'</div>'}
+}
+async function driveMuat(id){
+  try{const res=await fetch(SYNC_URL+'?secret='+encodeURIComponent(SYNC_SECRET)+'&aksi=arsipget&id='+encodeURIComponent(id),{cache:'no-store'});const j=await res.json();
+    if(!j.ok)throw new Error(j.error);const a=j.arsip;
+    if(!confirm('Jadikan arsip Drive cabang '+a.cab+' tanggal '+a.tgl+' ('+a.n+' rekening) sebagai data aktif?'))return;
+    DATA=DATA.filter(d=>cabOf(d)!==a.cab).concat(a.rows);jsave(K.data,DATA);syncPush('data',true);notify('Arsip Drive dimuat sebagai data aktif ✔');
+  }catch(err){notify('Gagal memuat: '+err.message,false)}
+}
+async function arsipUnduh(k){const a=await arsipGet(k);if(!a)return;
+  const el=document.createElement('a');el.href=URL.createObjectURL(new Blob([JSON.stringify(a)],{type:'application/json'}));el.download='arsip-'+a.cab+'-'+a.tgl+'.json';
+  document.body.appendChild(el);el.click();setTimeout(()=>{URL.revokeObjectURL(el.href);el.remove()},800)}
+async function arsipPulih(k){const a=await arsipGet(k);if(!a)return;
+  if(!confirm('Jadikan arsip cabang '+a.cab+' tanggal '+a.tgl+' ('+a.n+' rekening) sebagai data aktif?\nData aktif cabang itu saat ini akan diganti (tetap ada di arsipnya sendiri bila sudah pernah diupload).'))return;
+  DATA=DATA.filter(d=>cabOf(d)!==a.cab).concat(a.rows);jsave(K.data,DATA);syncPush('data',true);notify('Arsip dipulihkan sebagai data aktif ✔');}
+async function arsipHapus(k){if(!confirm('Hapus arsip '+k.replace('|',' tanggal ')+' secara permanen?'))return;await arsipDel(k);pgArs()}
 /* ================= RIWAYAT MINGGUAN ================= */
 const KRW='kop_riwayat';
 let RIWAYAT=jload(KRW,[]);
@@ -635,8 +721,8 @@ function diffRows(oldR,newR){
   oldR.forEach(o=>{if(!nm.has(o.rekening))r.keluar.push([o.rekening,o.nama,o.ao,collOf(o),o.outstanding])});
   return r;
 }
-function saveRiwayat(cab,rows,df){
-  const e={id:Date.now()+'-'+cab,tgl:todayISO(),cabang:cab,nama:(rows[0]&&rows[0].cabang_nama)||cab,s:snapRows(rows),diff:null};
+function saveRiwayat(cab,rows,df,tgl){
+  const e={id:Date.now()+'-'+cab,tgl:tgl||todayISO(),cabang:cab,nama:(rows[0]&&rows[0].cabang_nama)||cab,s:snapRows(rows),diff:null};
   if(df){const keep=a=>a.filter(x=>cabOf({rekening:x[0]})===cab).slice(0,200);
     e.diff={};Object.keys(df).forEach(k=>{e.diff[k]={n:df[k].filter(x=>cabOf({rekening:x[0]})===cab).length,rows:keep(df[k])}})}
   RIWAYAT=RIWAYAT.filter(r=>!(r.cabang===cab&&r.tgl===e.tgl));  // upload ulang di hari yang sama = koreksi
@@ -684,7 +770,7 @@ function pgRw(){
       +tblDiff('Rekening baru',last.diff.baru.rows,['Coll','Outstanding'],v=>typeof v==='number'&&v<=5?collLabel(v):rp(v)):''}
     </div>`}).join('');
   document.getElementById('content').innerHTML=`<div class="panel"><h3>📈 Riwayat Mingguan</h3>
-    <p class="mut" style="margin-bottom:10px">Ringkasan tiap upload disimpan otomatis, dan dibandingkan dengan upload sebelumnya untuk cabang yang sama. Riwayat tersimpan di perangkat yang dipakai upload.</p>
+    <p class="mut" style="margin-bottom:10px">Ringkasan tiap upload disimpan otomatis menurut tanggal data, dan dibandingkan dengan upload sebelumnya untuk cabang yang sama. Riwayat tersimpan di perangkat yang dipakai upload.</p>
     <div class="toolbar"><button class="btn-s" onclick="backupAll()">💾 Backup laporan & riwayat (JSON)</button></div></div>`+body;
 }
 function backupAll(){
@@ -850,7 +936,7 @@ async function syncSend(kind,records){
   try{
     const res=await fetch(SYNC_URL,{method:'POST',body:JSON.stringify({secret:SYNC_SECRET,kind,records,scope:syncScope()})});
     const j=await res.json();
-    if(j&&j.ok)return {ok:true};
+    if(j&&j.ok)return {ok:true,res:j};
     return {ok:false,error:(j&&j.error)||('HTTP '+res.status+' — server menjawab tidak dikenali')};
   }catch(err){return {ok:false,error:'tidak terhubung: '+err.message}}
 }
