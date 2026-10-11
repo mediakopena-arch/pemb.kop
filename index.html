@@ -208,7 +208,7 @@ const collClass=c=>'b'+Math.min(5,Math.max(1,c||1));
 const esc=s=>String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 /* Kolom tanggal yang masih berisi nilai otomatis ikut diperbarui saat aplikasi dibuka lagi di hari berikutnya */
-function refreshTgl(){['lpTgl','fTgl','upTgl'].forEach(id=>{const el=document.getElementById(id);if(el&&el.dataset.auto&&el.value===el.dataset.auto&&el.dataset.auto!==todayISO()){el.value=el.dataset.auto=todayISO();if(id==='fTgl'&&typeof renderLapList==='function')renderLapList()}})}
+function refreshTgl(){['lpTgl','fTgl','upTgl','cTgl'].forEach(id=>{const el=document.getElementById(id);if(el&&el.dataset.auto&&el.value===el.dataset.auto&&el.dataset.auto!==todayISO()){el.value=el.dataset.auto=todayISO();if(id==='fTgl'&&typeof renderLapList==='function')renderLapList()}})}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshTgl()});
 setInterval(refreshTgl,60000);
 const tglNow=()=>new Date().toLocaleDateString('id-ID');
@@ -271,6 +271,7 @@ function getMenus(){
  {id:'lap',t:'📋 Laporan Harian'},
  {id:'out',t:'💰 Daftar Outstanding'},
  {id:'pinj',t:'📑 Pinjaman & Kondisi Call'},
+ {id:'cair',t:'💵 Laporan Pencairan'},
  ...(SES&&SES.role==='admin'?[{id:'up',t:'⬆️ Upload Data'},{id:'rw',t:'📈 Riwayat Mingguan'},{id:'ars',t:'🗄️ Arsip Upload'}]:[]),
  {id:'rpt',t:'🖨️ Laporan'},
  {id:'sync',t:'🔄 Sinkronisasi'},
@@ -287,7 +288,7 @@ function go(id){
   PAGE=id;
   document.querySelectorAll('nav a, .mnav a').forEach(a=>a.classList.toggle('active',a.dataset.id===id));
   document.getElementById('pageTitle').textContent=getMenus().find(m=>m.id===id)?.t.replace(/^[^ ]+ /,'')||'';
-  ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,rpt:pgRpt,sync:pgSync,ao:pgAO,usr:pgUsr,rw:pgRw,ars:pgArs})[id]();
+  ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,rpt:pgRpt,sync:pgSync,ao:pgAO,usr:pgUsr,rw:pgRw,ars:pgArs,cair:pgCair})[id]();
   window.scrollTo(0,0);
 }
 function notify(t,ok=true){const n=document.getElementById('notif');n.className='notif '+(ok?'ok':'bad');n.textContent=t;setTimeout(()=>n.className='notif',3500)}
@@ -642,6 +643,106 @@ function doUpload(){
   };
   rd.readAsText(f);
 }
+/* ================= LAPORAN PENCAIRAN ================= */
+const KCAIR='kop_pencairan';
+let PENC=jload(KCAIR,[]);
+const JENIS_CAIR=['Murabahah','Musyarakah Berjangka'];   // tambah/ubah pilihan jenis pembiayaan di sini
+const parseNom=s=>parseInt(String(s||'').replace(/\D/g,''),10)||0;
+const fmtTgl=iso=>iso?new Date(iso+'T00:00:00').toLocaleDateString('id-ID'):'';
+function fmtNomInput(el){const n=parseNom(el.value);el.value=n?n.toLocaleString('id-ID'):''}
+function cairVisible(){
+  return PENC.filter(r=>!r.dihapus&&(SES.role==='admin'?(myCabang()==='all'||r.cabang===myCabang()):r.user===SES.user));
+}
+function pgCair(){
+  const tgl=todayISO();
+  const aos=[...new Set(cairVisible().map(r=>r.petugas))].sort();
+  document.getElementById('content').innerHTML=`
+  <div class="panel"><h3>💵 Input Laporan Pencairan</h3>
+    <div class="rowflex">
+      <div><label>Tanggal pencairan</label><input type="date" id="cTgl" value="${tgl}" data-auto="${tgl}"></div>
+      <div><label>Nama AO</label><input id="cAO" value="${esc(SES.nama)}" readonly></div>
+      <div style="flex:2;min-width:220px"><label>Nama lengkap nasabah</label><input id="cNama" placeholder="Ketik nama lengkap sesuai KTP" autocomplete="off"></div>
+    </div>
+    <div class="rowflex">
+      <div style="flex:2;min-width:200px"><label>Nomor rekening pembiayaan</label><input id="cRek" inputmode="numeric" placeholder="Contoh: 541052000201" autocomplete="off"></div>
+      <div><label>Nominal pencairan (Rp)</label><input id="cNom" inputmode="numeric" placeholder="0" oninput="fmtNomInput(this)" autocomplete="off"></div>
+      <div><label>Jangka waktu</label>
+        <div style="display:flex;gap:6px"><input id="cJk" type="number" min="1" inputmode="numeric" placeholder="12" style="width:90px"><select id="cSat"><option value="bulan">bulan</option><option value="hari">hari</option><option value="tahun">tahun</option></select></div></div>
+      <div><label>Jenis pembiayaan</label><select id="cJenis" onchange="document.getElementById('cJenisLain').style.display=this.value==='__lain'?'block':'none'">
+        <option value="">— pilih jenis —</option>
+        ${JENIS_CAIR.map(j=>`<option>${esc(j)}</option>`).join('')}<option value="__lain">Lainnya…</option></select>
+        <input id="cJenisLain" placeholder="Ketik jenis pembiayaan" style="display:none;margin-top:6px"></div>
+    </div>
+    <div class="toolbar"><button class="btn-p" style="width:auto;margin:0" onclick="saveCair()">💾 Simpan Pencairan</button></div>
+  </div>
+  <div class="panel"><h3>Daftar Pencairan</h3>
+    <div class="toolbar">
+      <input type="month" id="fcBln" value="${tgl.slice(0,7)}" onchange="renderCairList()" title="Kosongkan untuk semua bulan">
+      ${SES.role==='admin'?`<select id="fcAO" onchange="renderCairList()"><option value="">Semua AO</option>${aos.map(a=>`<option>${esc(a)}</option>`).join('')}</select>`:''}
+      <select id="fcJenis" onchange="renderCairList()"><option value="">Semua jenis</option>${JENIS_CAIR.map(j=>`<option>${esc(j)}</option>`).join('')}</select>
+      <button class="btn-s" onclick="cairCSV()">⬇️ CSV</button>
+      <button class="btn-s" onclick="cairCetak()">🖨️ Cetak</button>
+    </div>
+    <div id="cairList"></div>
+  </div>`;
+  renderCairList();
+}
+function saveCair(){
+  const g=id=>document.getElementById(id).value.trim();
+  const rek=g('cRek').replace(/\s/g,''),nama=g('cNama'),nom=parseNom(g('cNom')),jk=parseInt(g('cJk'),10)||0,tgl=g('cTgl');
+  let jenis=g('cJenis');if(jenis==='__lain')jenis=g('cJenisLain');
+  if(!tgl){notify('Tanggal wajib diisi',false);return}
+  if(!nama){notify('Nama lengkap nasabah wajib diisi',false);return}
+  if(!/^\d{6,}$/.test(rek)){notify('Nomor rekening harus angka (minimal 6 digit)',false);return}
+  if(nom<=0){notify('Nominal harus lebih dari 0',false);return}
+  if(jk<=0){notify('Jangka waktu wajib diisi',false);return}
+  if(!jenis){notify('Pilih jenis pembiayaan',false);return}
+  const dup=PENC.find(r=>!r.dihapus&&r.rekening===rek);
+  if(dup&&!confirm('Nomor rekening '+rek+' sudah pernah dilaporkan ('+dup.nama+', '+fmtTgl(dup.tanggalISO)+', '+rp(dup.nominal)+').\nTetap simpan sebagai pencairan baru?'))return;
+  const cb=(SES.cabang&&SES.cabang!=='all')?SES.cabang:cabOf({rekening:rek});
+  PENC.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6),upd:Date.now(),tanggalISO:tgl,user:SES.user,petugas:SES.nama,cabang:cb,
+    rekening:rek,nama:nama,nominal:nom,jangka:jk,satuan:g('cSat'),jenis:jenis});
+  jsave(KCAIR,PENC);syncPush('pencairan',true);
+  notify('Pencairan tersimpan ✔');pgCair();
+}
+function cairFiltered(){
+  const b=(document.getElementById('fcBln')||{}).value||'',a=(document.getElementById('fcAO')||{}).value||'',j=(document.getElementById('fcJenis')||{}).value||'';
+  return cairVisible().filter(r=>(!b||r.tanggalISO.slice(0,7)===b)&&(!a||r.petugas===a)&&(!j||r.jenis===j))
+    .sort((x,y)=>x.tanggalISO<y.tanggalISO?1:x.tanggalISO>y.tanggalISO?-1:y.upd-x.upd);
+}
+function renderCairList(){
+  const rows=cairFiltered();const box=document.getElementById('cairList');if(!box)return;
+  const tot=rows.reduce((s,r)=>s+r.nominal,0);
+  const perJ={};rows.forEach(r=>{const o=perJ[r.jenis]=perJ[r.jenis]||{n:0,t:0};o.n++;o.t+=r.nominal});
+  box.innerHTML=rows.length?`<p style="margin:6px 0"><b>${rows.length}</b> pencairan · total <b>${rp(tot)}</b>
+    ${Object.keys(perJ).map(k=>`<span class="badge b1" style="margin-left:6px">${esc(k)}: ${perJ[k].n} · ${rp(perJ[k].t)}</span>`).join('')}</p>
+    <div style="overflow-x:auto"><table><tr><th>Tanggal</th><th>AO</th><th>No. Rekening</th><th>Nama Lengkap</th><th class="r">Nominal</th><th>Jangka</th><th>Jenis</th><th></th></tr>
+    ${rows.map(r=>`<tr><td>${esc(fmtTgl(r.tanggalISO))}</td><td>${esc(r.petugas)}</td><td>${esc(r.rekening)}</td><td>${esc(r.nama)}</td>
+      <td class="num">${rp(r.nominal)}</td><td>${r.jangka} ${esc(r.satuan)}</td><td>${esc(r.jenis)}</td>
+      <td>${(SES.role==='admin'||r.user===SES.user)?`<button class="btn-d" data-id="${esc(r.id)}" onclick="delCair(this.dataset.id)">✕</button>`:''}</td></tr>`).join('')}</table></div>`
+    :'<p class="mut">Belum ada pencairan pada filter ini.</p>';
+}
+function delCair(id){
+  const r=PENC.find(x=>x.id===id);if(!r||!confirm('Hapus pencairan '+r.nama+' ('+rp(r.nominal)+')?'))return;
+  r.dihapus=true;r.upd=Date.now();jsave(KCAIR,PENC);syncPush('pencairan',true);renderCairList();
+}
+function cairCSV(){
+  const rows=cairFiltered();const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  let csv='\ufeffTanggal;AO;No. Rekening;Nama Lengkap;Nominal;Jangka Waktu;Jenis Pembiayaan\n';
+  rows.forEach(r=>csv+=[q(fmtTgl(r.tanggalISO)),q(r.petugas),q("'"+r.rekening),q(r.nama),r.nominal,q(r.jangka+' '+r.satuan),q(r.jenis)].join(';')+'\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='pencairan-'+todayISO()+'.csv';
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
+}
+function cairCetak(){
+  const rows=cairFiltered();const w=window.open('','_blank');if(!w){notify('Pop-up diblokir browser',false);return}
+  const tot=rows.reduce((s,r)=>s+r.nominal,0);
+  w.document.write(`<html><head><title>Laporan Pencairan</title><style>body{font:12px Arial;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #444;padding:4px 6px}th{background:#eee}.r{text-align:right}</style></head><body>
+  <h3>Laporan Pencairan Pembiayaan</h3><p>Dicetak: ${esc(new Date().toLocaleString('id-ID'))} · ${esc(SES.nama)}</p>
+  <table><tr><th>No</th><th>Tanggal</th><th>AO</th><th>No. Rekening</th><th>Nama Lengkap</th><th>Nominal</th><th>Jangka</th><th>Jenis</th></tr>
+  ${rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(fmtTgl(r.tanggalISO))}</td><td>${esc(r.petugas)}</td><td>${esc(r.rekening)}</td><td>${esc(r.nama)}</td><td class="r">${rp(r.nominal)}</td><td>${r.jangka} ${esc(r.satuan)}</td><td>${esc(r.jenis)}</td></tr>`).join('')}
+  <tr><th colspan="5" class="r">Total (${rows.length})</th><th class="r">${rp(tot)}</th><th colspan="2"></th></tr></table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();
+}
 /* ================= ARSIP UPLOAD (IndexedDB, kunci = cabang|tanggal data) ================= */
 function arsipDB(){return new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('IndexedDB tidak tersedia'));
   const q=indexedDB.open('kop_arsip',1);q.onupgradeneeded=()=>q.result.createObjectStore('a',{keyPath:'key'});q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
@@ -953,6 +1054,11 @@ async function syncPull(manual){
       DATA.forEach(d=>d.sudah_angsur=sudahAngsur(d));
       jsave(K.data,DATA);
     }
+    if(Array.isArray(j.pencairan)){
+      const m={};PENC.forEach(r=>m[r.id]=r);
+      j.pencairan.forEach(r=>{const o=m[r.id];if(!o||(r.upd||0)>=(o.upd||0))m[r.id]=r});
+      PENC=Object.values(m);jsave(KCAIR,PENC);
+    }
     if(Array.isArray(j.laporan)){
       const map={};LAP.forEach(l=>map[l.id]=l);j.laporan.forEach(l=>{const o=map[l.id];map[l.id]=(o&&o.foto&&!l.foto)?Object.assign({},l,{foto:o.foto}):l});
       LAP=Object.values(map);jsave(K.lap,LAP);
@@ -974,6 +1080,7 @@ async function syncPush(kind,quiet){
   let records,msg;
   if(kind==='data'){records=syncScope()==='all'?DATA:DATA.filter(inCabang);msg='data '+records.length+' rekening'+(syncScope()==='all'?' (semua cabang)':' cabang '+syncScope())}
   else if(kind==='laporan'){records=SYNC_FOTO?LAP:LAP.map(l=>l.foto?Object.assign({},l,{foto:null,fotoAda:true}):l);msg='laporan '+records.length+' catatan'}
+  else if(kind==='pencairan'){records=PENC;msg='pencairan '+records.length+' catatan'}
   else if(kind==='users'){if(syncScope()!=='all'){if(!quiet)notify('Hanya akun Pusat yang boleh mengirim daftar akun',false);return}records=users;msg='daftar akun'}
   else if(kind==='aomap'){if(syncScope()!=='all'){if(!quiet)notify('Hanya akun Pusat',false);return}records=AOMAP;msg='pemetaan AO'}
   else if(kind==='cabangs'){records=CABANGS;msg='daftar cabang'}
@@ -993,7 +1100,8 @@ function pgSync(){
       <button class="btn-s" onclick="syncPush('users')">⬆️ Akun</button>
       <button class="btn-s" onclick="syncPush('aomap')">⬆️ Pemetaan AO</button>
       <button class="btn-s" onclick="syncPush('cabangs')">⬆️ Cabang</button>
-      <button class="btn-s" onclick="syncPush('laporan')">⬆️ Kirim laporan</button>`:
+      <button class="btn-s" onclick="syncPush('laporan')">⬆️ Kirim laporan</button>
+      <button class="btn-s" onclick="syncPush('pencairan')">⬆️ Kirim pencairan</button>`:
       `<span class="mut">Laporan Anda terkirim otomatis tiap menyimpan. Data diatur admin — Anda cukup menarik data terbaru.</span>`}
     </div>
     <p class="mut" style="margin-top:10px"><b>Alur kerja yang disarankan:</b><br>
