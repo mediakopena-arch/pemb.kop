@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KoperasiKu - Sistem Tagihan Mitra Usaha</title>
+<title>Kopena - Sistem Tagihan Mitra Usaha</title>
 <style>
 :root{--p:#0e6e5d;--pd:#0a4f43;--a:#f0a92e;--bg:#f2f5f4;--tx:#1e2b28;--mut:#7a8a86;--card:#fff;--line:#e2e9e7;--red:#c0392b;--blue:#2563eb;}
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif}
@@ -82,6 +82,19 @@ main{margin-left:230px;padding:24px}
 .jt-tbl tr.jt-sub td{background:#f3f8f6;font-weight:700;border-bottom:none}
 .jt-tbl tr.jt-tot td{background:var(--p);color:#fff;font-weight:700;border-bottom:none;padding:11px 8px}
 .jt-tbl tr.jt-tot td small{color:#d6ebe5}
+
+.vz-wrap{margin-bottom:14px}
+.vz-donut{position:relative;max-width:190px;margin:4px auto 0}
+.vz-donut svg{display:block;width:100%;height:auto}
+.vz-donut .vz-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center}
+.vz-donut .vz-c b{font-size:15px;color:var(--pd);font-variant-numeric:tabular-nums}
+.vz-donut .vz-c small{font-size:10px;color:var(--mut)}
+.vz-bar{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:12px}
+.vz-bar .l{flex:0 0 74px;color:#4d5d59;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vz-bar .t{flex:1;height:14px;background:#edf2f1;border-radius:7px;overflow:hidden}
+.vz-bar .t i{display:block;height:100%;border-radius:7px;background:linear-gradient(90deg,var(--p),#2fa58f)}
+.vz-bar .n{flex:0 0 auto;min-width:54px;text-align:right;font-weight:700;color:var(--pd);font-variant-numeric:tabular-nums}
+.vz-leg b{font-weight:700;color:var(--tx)}
 .jt-empty{padding:36px 10px;text-align:center;color:var(--mut);font-size:14px;line-height:1.9}
 .panel h3{font-size:15px;margin-bottom:14px;color:var(--p)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -142,7 +155,7 @@ tr:hover td{background:#fafcfb}
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="KoperasiKu">
+<meta name="apple-mobile-web-app-title" content="Kopena">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
@@ -529,6 +542,84 @@ function renderLapList(){
    :'<p class="mut">Belum ada laporan untuk filter ini.</p>';
 }
 
+
+/* ================= DIAGRAM (SVG murni) ================= */
+const VZ_COLL={1:'#1c9a57',2:'#e0b000',3:'#e07b1a',4:'#c0392b',5:'#4a1512'};
+function vzDonut(items,ctr,sub){
+  const tot=items.reduce((a,x)=>a+x.v,0);
+  if(!(tot>0))return '<p class="mut" style="padding:34px 0;text-align:center">Belum ada data</p>';
+  const cx=150,cy=78,rx=112,ry=52,k=.56,dep=18,f=v=>v.toFixed(1);
+  const pt=(a,sx,sy)=>[cx+sx*Math.cos(a),cy+sy*Math.sin(a)];
+  let a=-Math.PI/2;const sl=[];
+  items.forEach(x=>{if(!(x.v>0))return;let sp=x.v/tot*2*Math.PI;if(sp>2*Math.PI-.002)sp=2*Math.PI-.002;sl.push({a0:a,a1:a+sp,c:x.c});a+=sp});
+  const path=(z,dy)=>{
+    const o0=pt(z.a0,rx,ry),o1=pt(z.a1,rx,ry),i0=pt(z.a0,rx*k,ry*k),i1=pt(z.a1,rx*k,ry*k),lg=(z.a1-z.a0)>Math.PI?1:0;
+    return 'M'+f(o0[0])+','+f(o0[1]+dy)+' A'+rx+','+ry+' 0 '+lg+' 1 '+f(o1[0])+','+f(o1[1]+dy)+' L'+f(i1[0])+','+f(i1[1]+dy)+' A'+f(rx*k)+','+f(ry*k)+' 0 '+lg+' 0 '+f(i0[0])+','+f(i0[1]+dy)+' Z';
+  };
+  let g='<svg viewBox="0 0 300 '+(cy+ry+dep+14)+'" role="img">';
+  g+='<ellipse cx="'+cx+'" cy="'+(cy+dep+ry*.85)+'" rx="'+f(rx*.9)+'" ry="'+f(ry*.4)+'" fill="rgba(14,60,50,.10)"/>';
+  for(let d=dep;d>=1;d-=1.5)sl.forEach(z=>{const c=jtShade(z.c,.62);g+='<path d="'+path(z,d)+'" fill="'+c+'" stroke="'+c+'" stroke-width=".6"/>'});
+  sl.forEach(z=>{g+='<path d="'+path(z,0)+'" fill="'+z.c+'" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>'});
+  g+='<text x="'+cx+'" y="'+(cy+9)+'" text-anchor="middle" font-size="16" font-weight="700" fill="#0a4f43">'+esc(ctr)+'</text>';
+  g+='<text x="'+cx+'" y="'+(cy+22)+'" text-anchor="middle" font-size="10" fill="#7a8a86">'+esc(sub)+'</text></svg>';
+  const leg=items.filter(x=>x.v>0).map(x=>'<span><i style="background:'+x.c+'"></i>'+esc(x.l)+' <b>'+x.v.toLocaleString('id-ID')+'</b> \u00B7 '+(x.v/tot<.005?'<1':Math.round(x.v/tot*100))+'%</span>').join('');
+  return g+'<div class="jt-leg vz-leg">'+leg+'</div>';
+}
+function vzBars(items,fmt){
+  const n=items.length,mx=Math.max.apply(null,items.map(x=>x.v).concat([0]));
+  if(!n||!(mx>0))return '<p class="mut" style="padding:34px 0;text-align:center">Belum ada data</p>';
+  const slot=276/n,bw=Math.min(40,slot*.62),dx=Math.min(14,bw*.35),dy=Math.min(9,bw*.22);
+  let g='<svg viewBox="0 0 300 190" role="img">';
+  g+='<polygon points="8,153 22,144 294,144 280,153" fill="rgba(14,60,50,.07)"/>';
+  items.forEach((it,i)=>{
+    const val=it.v,h=val>0?Math.max(6,Math.round(val/mx*100)):3,x=18+i*slot+(slot-bw-dx)/2,y=150-h;
+    const col=it.c||((val===mx)?'#f0a92e':'#0e6e5d'),tx=x+(bw+dx)/2;
+    const lb=String(it.l);const lt=lb.length>(n>4?7:10)?lb.slice(0,n>4?6:9)+'\u2026':lb;
+    g+='<polygon points="'+x+','+y+' '+(x+dx)+','+(y-dy)+' '+(x+bw+dx)+','+(y-dy)+' '+(x+bw)+','+y+'" fill="'+jtShade(col,1.4)+'"/>';
+    g+='<polygon points="'+(x+bw)+','+y+' '+(x+bw+dx)+','+(y-dy)+' '+(x+bw+dx)+','+(150-dy)+' '+(x+bw)+',150" fill="'+jtShade(col,.7)+'"/>';
+    g+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" fill="'+col+'"/>';
+    g+='<text x="'+tx+'" y="'+(y-dy-5)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1e2b28">'+(val>0?esc(fmt(val)):'-')+'</text>';
+    g+='<text x="'+tx+'" y="168" text-anchor="middle" font-size="9.5" fill="#4d5d59">'+esc(lt)+'</text>';
+  });
+  return g+'</svg>';
+}
+function vzCollItems(r,useOS){
+  return [1,2,3,4,5].map(c=>{const g=r.filter(d=>collOf(d)===c);return{l:collLabel(c),c:VZ_COLL[c],v:useOS?g.reduce((a,d)=>a+(d.outstanding||0),0):g.length}});
+}
+function vzOutViz(r){
+  const nS=r.filter(d=>d.sudah_angsur).length,tot=r.reduce((a,d)=>a+(d.outstanding||0),0);
+  const tg=r.reduce((a,d)=>a+(d.tak_pokok>0?d.tak_pokok:0),0);
+  const pm={};r.forEach(d=>{pm[d.produk]=(pm[d.produk]||0)+(d.outstanding||0)});
+  const prod=Object.keys(pm).map(k=>({l:k,v:pm[k]})).sort((a,b)=>b.v-a.v).slice(0,6);
+  return '<div class="jt-kpi"><div class="jt-k"><small>\uD83D\uDCCB Rekening</small><b>'+r.length.toLocaleString('id-ID')+'</b></div>'
+   +'<div class="jt-k"><small>\uD83D\uDCB0 Outstanding</small><b>'+esc(rpS(tot))+'</b></div>'
+   +'<div class="jt-k"><small>\u26A0\uFE0F Tunggakan</small><b style="color:var(--red)">'+esc(rpS(tg))+'</b></div></div>'
+   +'<div class="jt-viz">'
+   +'<div class="jt-v"><h4>\uD83E\uDD67 Kolektibilitas (OS)</h4>'+vzDonut(vzCollItems(r,true),rpS(tot),'outstanding')+'</div>'
+   +'<div class="jt-v"><h4>\u2705 Status Angsuran</h4>'+vzDonut([{l:'Sudah',c:'#1c9a57',v:nS},{l:'Belum',c:'#c0392b',v:r.length-nS}],r.length?Math.round(nS/r.length*100)+'%':'-','sudah angsur')+'</div>'
+   +'<div class="jt-v"><h4>\uD83D\uDCCA Outstanding per Produk</h4>'+vzBars(prod,rpS)+'</div></div>';
+}
+function vzCallCat(d){
+  const lc=lastCall(d.rekening);
+  if(!lc)return 0;
+  if(lc.hasil==='Janji bayar')return 2;
+  if(lc.hasil==='Sudah membayar')return 3;
+  if((lc.hasil||'').includes('tidak diangkat')||(lc.hasil||'').includes('salah'))return 4;
+  return 1;
+}
+function vzPinjViz(r){
+  const nm=['Belum di-call','Sudah di-call (lainnya)','Janji bayar','Sudah membayar','Tidak diangkat / salah no.'],col=['#c0392b','#4c8bb5','#f0a92e','#1c9a57','#8a8f8d'];
+  const cnt=[0,0,0,0,0];r.forEach(d=>cnt[vzCallCat(d)]++);
+  const nS=r.filter(d=>d.sudah_angsur).length,sudahCall=r.length-cnt[0];
+  return '<div class="jt-kpi"><div class="jt-k"><small>\uD83D\uDCCB Pinjaman</small><b>'+r.length.toLocaleString('id-ID')+'</b></div>'
+   +'<div class="jt-k"><small>\uD83D\uDCDE Sudah di-call</small><b>'+sudahCall.toLocaleString('id-ID')+'</b></div>'
+   +'<div class="jt-k"><small>\uD83D\uDD52 Belum di-call</small><b style="color:var(--red)">'+cnt[0].toLocaleString('id-ID')+'</b></div></div>'
+   +'<div class="jt-viz">'
+   +'<div class="jt-v"><h4>\uD83D\uDCDE Kondisi Call Terakhir</h4>'+vzDonut(cnt.map((v,i)=>({l:nm[i],c:col[i],v:v})),r.length?Math.round(sudahCall/r.length*100)+'%':'-','sudah di-call')+'</div>'
+   +'<div class="jt-v"><h4>\u2705 Status Angsuran</h4>'+vzDonut([{l:'Sudah',c:'#1c9a57',v:nS},{l:'Belum',c:'#c0392b',v:r.length-nS}],r.length?Math.round(nS/r.length*100)+'%':'-','sudah angsur')+'</div>'
+   +'<div class="jt-v"><h4>\uD83D\uDCCA Jumlah per Kolektibilitas</h4>'+vzBars(vzCollItems(r,false),v=>v.toLocaleString('id-ID'))+'</div></div>';
+}
+
 /* ================= DAFTAR OUTSTANDING ================= */
 function pgOut(){
   const aos=[...new Set(myData().map(d=>d.ao))].sort();
@@ -537,7 +628,7 @@ function pgOut(){
   const cabOpts=pusat?('<select id="oCab" onchange="renderOut()"><option value="">Semua Cabang</option>'+
     [...new Set(DATA.map(cabOf))].sort().map(c=>`<option value="${c}">${c}</option>`).join('')+'</select>'):'';
   document.getElementById('content').innerHTML=`
-  <div class="panel"><h3>Daftar Outstanding ${SES.role==='admin'?'':'<span class="mut">(data AO Anda)</span>'}</h3>
+  <div class="panel"><h3>📊 Daftar Outstanding ${SES.role==='admin'?'':'<span class="mut">(data AO Anda)</span>'}</h3>
     <div class="toolbar">
       <input placeholder="cari nama / rekening..." id="oQ" onkeyup="renderOut()">
       ${cabOpts}
@@ -553,6 +644,7 @@ function pgOut(){
         <option value="1">\u2713 Sudah angsur</option><option value="0">\u2717 Belum angsur</option></select>
       <button class="btn-a" onclick="exportCSV()">\u2B07\uFE0F Export CSV</button>
     </div>
+    <div id="outViz" class="vz-wrap"></div>
     <div id="outList"></div>
   </div>`;
   if(pendingProd){const s=document.getElementById('oProd');if([...s.options].some(o=>o.value===pendingProd))s.value=pendingProd;pendingProd=null}
@@ -577,6 +669,7 @@ function renderOut(){
   const r=outFiltered();
   const tot=r.reduce((s,d)=>s+d.outstanding,0),tott=r.reduce((s,d)=>s+(d.tak_pokok>0?d.tak_pokok:0),0);
   const nSdh=r.filter(d=>d.sudah_angsur).length;
+  document.getElementById('outViz').innerHTML=vzOutViz(r);
   document.getElementById('outList').innerHTML=`<p class="mut" style="margin-bottom:8px">${r.length} rekening \u00B7 <b style="color:#1c7a43">\u2713 ${nSdh} sudah angsur</b> \u00B7 <b style="color:var(--red)">\u2717 ${r.length-nSdh} belum</b> \u00B7 Total outstanding: <b>${rp(tot)}</b> \u00B7 Total tunggakan: <b style="color:var(--red)">${rp(tott)}</b></p>
   <div style="overflow-x:auto"><table>
    <tr><th>No. Rekening</th><th>Nama</th><th>Produk</th><th>AO</th><th class="r">Plafond</th><th class="r">Outstanding</th>
@@ -603,7 +696,7 @@ function exportCSV(){
 function pgPinj(){
   const aos=[...new Set(myData().map(d=>d.ao))].sort();
   document.getElementById('content').innerHTML=`
-  <div class="panel"><h3>Daftar Pinjaman & Kondisi Call ${SES.role==='admin'?'':'<span class="mut">(data AO Anda)</span>'}</h3>
+  <div class="panel"><h3>📞 Daftar Pinjaman & Kondisi Call ${SES.role==='admin'?'':'<span class="mut">(data AO Anda)</span>'}</h3>
     <div class="toolbar">
       <input placeholder="cari nama / rekening..." id="pQ" onkeyup="renderPinj()">
       <select id="pAO" onchange="renderPinj()"><option value="">Semua AO</option>${aos.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
@@ -614,6 +707,7 @@ function pgPinj(){
       <select id="pStatus" onchange="renderPinj()"><option value="">Semua Status Angsur</option>
         <option value="1">\u2713 Sudah angsur</option><option value="0">\u2717 Belum angsur</option></select>
     </div>
+    <div id="pinjViz" class="vz-wrap"></div>
     <div id="pinjList"></div>
   </div>`;
   renderPinj();
@@ -637,6 +731,7 @@ function renderPinj(){
     return true;
   }).sort((a,b)=>b.outstanding-a.outstanding);
   const nSdh2=r.filter(d=>d.sudah_angsur).length;
+  document.getElementById('pinjViz').innerHTML=vzPinjViz(r);
   document.getElementById('pinjList').innerHTML=`<p class="mut" style="margin-bottom:8px">${r.length} rekening \u00B7 <b style="color:#1c7a43">\u2713 ${nSdh2} sudah angsur</b> \u00B7 <b style="color:var(--red)">\u2717 ${r.length-nSdh2} belum</b></p>
   <div style="overflow-x:auto"><table>
    <tr><th>Rekening</th><th>Nama</th><th>Produk</th><th>AO</th><th class="r">Outstanding</th><th class="r">Tunggakan</th>
@@ -871,7 +966,7 @@ async function pgArs(){
     <button class="btn-a" data-k="${esc(a.key)}" onclick="arsipPulih(this.dataset.k)">\u21A9\uFE0F Jadikan data aktif</button>
     <button class="btn-d" data-k="${esc(a.key)}" onclick="arsipHapus(this.dataset.k)">\u2715</button></td></tr>`).join('')}</table></div>`:'<p class="mut">Belum ada arsip. Arsip dibuat otomatis setiap upload.</p>'}
   <h3 style="margin-top:18px">\u2601\uFE0F Arsip di Google Drive</h3>
-  <p class="mut" style="margin:6px 0">Folder <b>Arsip KOPERASIKU</b> di Google Drive pemilik skrip. Tersedia dari perangkat mana pun.</p>
+  <p class="mut" style="margin:6px 0">Folder <b>Arsip KOPENA</b> di Google Drive pemilik skrip. Tersedia dari perangkat mana pun.</p>
   <div class="toolbar"><button class="btn-s" onclick="driveDaftar()">\uD83D\uDD04 Muat daftar dari Drive</button></div>
   <div id="drvList"></div>
   </div>`;
@@ -1460,7 +1555,7 @@ async function cetakAnalisa(){
     return{a,n:g.length,os:sum(g,d=>d.outstanding),tg:sum(g,tung),sd:g.filter(d=>d.sudah_angsur).length,call:lp.length,u:u.size,pn:pe.length,pt:sum(pe,r=>r.nominal)}});
   /* susun laporan */
   const tgl=new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
-  printInit('Analisa Kondisi OS \u2014 KoperasiKu',`Dicetak ${tgl} \u00B7 ${ao?'AO: '+ao:'Semua AO'} \u00B7 Periode ${fmtTgl(dari)} s/d ${fmtTgl(sampai)} \u00B7 ${rows.length} rekening`);
+  printInit('Analisa Kondisi OS \u2014 Kopena',`Dicetak ${tgl} \u00B7 ${ao?'AO: '+ao:'Semua AO'} \u00B7 Periode ${fmtTgl(dari)} s/d ${fmtTgl(sampai)} \u00B7 ${rows.length} rekening`);
   const kpi=(l,v)=>`<div class="kpi">${l}<b>${v}</b></div>`;
   let h=`<div class="kpis">${kpi('Total OS',rp(tot))}${kpi('Tunggakan pokok',rp(tg))}${kpi('Sudah angsur',pc(sudah,rows.length))}${kpi('OS Coll 3\u20135',pc(npl,tot))}</div>
    <h2>Ringkasan Analisa</h2><ul style="margin:4px 0 8px 16px;font-size:9.5pt;line-height:1.5">${A.map(x=>`<li>${x}</li>`).join('')}</ul>`;
@@ -1507,7 +1602,7 @@ function cetakColl(){
   const clamp=d=>Math.min(5,Math.max(1,d.coll_val||1));
   const rows=myData().filter(d=>(!f||clamp(d)==f)&&(!st||(d.sudah_angsur?1:0)==st));
   const tgl=new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
-  printInit('Laporan Kolektibilitas (Coll) \u2014 KoperasiKu',`Dicetak ${tgl} \u00B7 ${rows.length} rekening`);
+  printInit('Laporan Kolektibilitas (Coll) \u2014 Kopena',`Dicetak ${tgl} \u00B7 ${rows.length} rekening`);
   let h=`<table><tr><th>Kolektibilitas</th><th>Jumlah</th><th>Total Outstanding</th><th>Total Tunggakan</th></tr>`;
   [1,2,3,4,5].forEach(c=>{const g=rows.filter(d=>clamp(d)===c);
     h+=`<tr><td>${collLabel(c)}</td><td>${g.length}</td><td class="num">${rp(g.reduce((s,d)=>s+d.outstanding,0))}</td><td class="num">${rp(g.reduce((s,d)=>s+Math.max(0,d.tak_pokok),0))}</td></tr>`});
