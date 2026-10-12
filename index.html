@@ -609,6 +609,31 @@ function vzCallCat(d){
   if((lc.hasil||'').includes('tidak diangkat')||(lc.hasil||'').includes('salah'))return 4;
   return 1;
 }
+/* Bagi hasil masuk: produk 111 tidak dihitung; produk 551 (tempo) seluruh setoran = bagi hasil;
+   produk lain = margin yang masuk (kolom 12 export, tersimpan di masuk_pokok - lihat catatan rumus status angsur). */
+function bhOf(d){
+  const k=String(d.kode||'');
+  if(k==='111')return 0;
+  const m=d.masuk_pokok||0;
+  return k==='551'?m+(d.tag_margin||0):m;
+}
+function bhPanel(r){
+  let tot=0,n=0;const pp={},pa={};
+  r.forEach(d=>{const v=bhOf(d);if(!(v>0))return;tot+=v;n++;
+    const kp=(d.kode||'')+' \u2014 '+(d.produk||'');const a=pp[kp]=pp[kp]||{n:0,v:0};a.n++;a.v+=v;
+    const b=pa[d.ao]=pa[d.ao]||{n:0,v:0};b.n++;b.v+=v});
+  const cabs=[...new Set(r.map(cabOf))];let dl=null,tg='';
+  cabs.forEach(cb=>{const L=RIWAYAT.filter(x=>x.cabang===cb).sort((a,b)=>a.tgl<b.tgl?-1:1);
+    if(L.length>=2){const a=L[L.length-1],b=L[L.length-2];
+      if(a.s&&b.s&&a.s.bh!=null&&b.s.bh!=null){dl=(dl||0)+a.s.bh-b.s.bh;tg=a.tgl}}});
+  const row=o=>Object.keys(o).sort((x,y)=>o[y].v-o[x].v).map(k=>'<tr><td>'+esc(k)+'</td><td class="num">'+o[k].n+'</td><td class="num"><b>'+rp(o[k].v)+'</b></td></tr>').join('')||'<tr><td colspan="3" class="mut">Belum ada bagi hasil masuk</td></tr>';
+  return '<div class="panel"><h3>\uD83D\uDCB0 Bagi Hasil Masuk</h3>'
+   +'<div class="cards" style="margin-bottom:12px"><div class="card"><h4>Total bagi hasil masuk</h4><div class="v" style="color:#1c7a43">'+rp(tot)+'</div><div class="s">dari '+n+' rekening yang sudah angsur</div></div>'
+   +'<div class="card"><h4>Masuk hari ini</h4><div class="v">'+(dl==null?'-':rp(dl))+'</div><div class="s">'+(dl==null?'muncul setelah 2 kali upload data (data baru)':'selisih dari upload sebelumnya \u00B7 tgl data '+esc(fmtTgl(tg)))+'</div></div></div>'
+   +'<div style="overflow-x:auto"><table><tr><th>Produk</th><th class="r">Rek.</th><th class="r">Bagi hasil</th></tr>'+row(pp)+'</table></div>'
+   +'<div style="overflow-x:auto;margin-top:12px"><table><tr><th>AO</th><th class="r">Rek.</th><th class="r">Bagi hasil</th></tr>'+row(pa)+'</table></div>'
+   +'<p class="mut" style="margin-top:6px">Produk 111 tidak dihitung. Produk 551 (tempo): seluruh setoran dihitung bagi hasil.</p></div>';
+}
 function vzPinjViz(r){
   const nS=r.filter(d=>d.sudah_angsur).length;
   const totO=r.reduce((a,d)=>a+(d.outstanding||0),0);
@@ -631,6 +656,7 @@ function vzPinjViz(r){
     <div class="jt-v"><h4>\uD83D\uDCCA Jumlah per Kolektibilitas</h4>${vzBars(vzCollItems(r,false),v=>v.toLocaleString('id-ID'))}</div>
     <div class="jt-v"><h4>\uD83D\uDCCA Outstanding per Produk</h4>${vzBars(prod,rpS)}</div>
   </div>`;
+  h+=bhPanel(r);
   h+=`<div class="panel"><h3>Rekening per Produk</h3><table>
     <tr><th>Produk</th><th class="r">Jumlah</th><th class="r">Total Outstanding</th></tr>
     ${Object.keys(pm).sort((a,b)=>pm[b]-pm[a]).map(p=>`<tr style="cursor:pointer" title="Klik untuk lihat daftar nasabah" onclick="openProdFilter('${esc(p)}')"><td>\u25B8 ${esc(p)}</td><td class="num">${pc[p]}</td><td class="num">${rp(pm[p])}</td></tr>`).join('')||'<tr><td colspan="3" class="mut">Belum ada data</td></tr>'}
@@ -1036,9 +1062,9 @@ const KRW='kop_riwayat';
 let RIWAYAT=jload(KRW,[]);
 const collOf=d=>Math.min(5,Math.max(1,d.coll_val||1));
 function snapRows(rows){
-  const s={n:rows.length,out:0,tung:0,sudah:0,coll:{1:0,2:0,3:0,4:0,5:0},ao:{}};
+  const s={n:rows.length,out:0,tung:0,sudah:0,bh:0,coll:{1:0,2:0,3:0,4:0,5:0},ao:{}};
   rows.forEach(d=>{const t=Math.max(0,d.tak_pokok||0);s.out+=d.outstanding||0;s.tung+=t;if(d.sudah_angsur)s.sudah++;s.coll[collOf(d)]++;
-    const a=s.ao[d.ao]=s.ao[d.ao]||{n:0,out:0,tung:0,sudah:0};a.n++;a.out+=d.outstanding||0;a.tung+=t;if(d.sudah_angsur)a.sudah++});
+    s.bh+=bhOf(d);const a=s.ao[d.ao]=s.ao[d.ao]||{n:0,out:0,tung:0,sudah:0};a.n++;a.out+=d.outstanding||0;a.tung+=t;if(d.sudah_angsur)a.sudah++});
   return s;
 }
 function diffRows(oldR,newR){
