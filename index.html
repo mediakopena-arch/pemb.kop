@@ -44,6 +44,45 @@ main{margin-left:230px;padding:24px}
 .card .v{font-size:22px;font-weight:700;margin-top:6px}
 .card .s{font-size:12px;color:var(--mut);margin-top:4px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:20px}
+/* BERANDA - MENU IKON 3D */
+.hm-hello{margin:2px 2px 16px;font-size:14px;color:var(--mut)}
+.hm-hello b{display:block;margin-top:1px;font-size:22px;color:var(--pd)}
+.hm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px 8px;margin-bottom:26px}
+@media(min-width:560px){.hm-grid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}}
+.hm-i{background:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:9px;color:var(--tx);font-weight:600;font-size:12.5px;line-height:1.25;text-align:center;-webkit-tap-highlight-color:transparent}
+.hm-t{position:relative;width:92px;height:92px;border-radius:30px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.9);box-shadow:0 14px 22px -14px rgba(14,110,93,.6),inset 0 2px 0 #fff,inset 0 -8px 14px rgba(14,110,93,.07);transition:transform .15s}
+.hm-i:active .hm-t{transform:scale(.93)}
+.hm-t svg{width:70px;height:70px;filter:drop-shadow(0 5px 3px rgba(0,0,0,.2))}
+.hm-b{position:absolute;top:-4px;right:-2px;min-width:21px;height:21px;padding:0 5px;border-radius:11px;background:#e5382d;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 3px 6px -2px rgba(229,56,45,.6)}
+/* JATUH TEMPO */
+.jt-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.jt-head h3{font-size:17px;color:var(--pd)}
+.jt-per{font-size:12px;color:var(--mut);font-weight:600}
+.jt-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.jt-filter input,.jt-filter select{width:auto;min-width:0;flex:1 1 130px;padding:8px 14px;font-size:13px;border-radius:999px;background:#f6f9f8}
+.jt-filter button{padding:8px 14px;font-size:13px;border-radius:999px}
+.jt-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.jt-k{background:linear-gradient(150deg,#fff,#eff6f4);border:1px solid var(--line);border-radius:14px;padding:11px 12px;box-shadow:0 8px 16px -10px rgba(14,110,93,.45)}
+.jt-k small{display:block;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);font-weight:700}
+.jt-k b{display:block;margin-top:3px;font-size:17px;color:var(--pd);font-variant-numeric:tabular-nums;white-space:nowrap}
+.jt-viz{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:14px}
+.jt-v{border:1px solid var(--line);border-radius:14px;padding:12px 12px 10px;background:#fbfdfc}
+.jt-v h4{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:4px}
+.jt-v svg{display:block;width:100%;height:auto;max-width:360px;margin:0 auto}
+.jt-leg{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;margin-top:6px;font-size:11.5px;color:#4d5d59}
+.jt-leg i,.jt-dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.jt-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.jt-tbl td{padding:9px 8px;border-bottom:1px solid var(--line);background:none;vertical-align:top}
+.jt-tbl tr.jt-g td{padding:16px 8px 7px;border-bottom:2px solid var(--line);font-weight:700;font-size:12.5px;color:var(--pd);letter-spacing:.02em}
+.jt-nm b{display:block;font-size:13.5px;font-weight:600}
+.jt-nm small{display:block;margin-top:1px;color:var(--mut);font-size:11px}
+.jt-tg{white-space:nowrap;font-size:12.5px}
+.jt-chip{display:inline-block;margin-top:3px;padding:1px 8px;border-radius:999px;font-size:10.5px;font-weight:700}
+.jt-tbl td.num small{font-size:10.5px;font-weight:400}
+.jt-tbl tr.jt-sub td{background:#f3f8f6;font-weight:700;border-bottom:none}
+.jt-tbl tr.jt-tot td{background:var(--p);color:#fff;font-weight:700;border-bottom:none;padding:11px 8px}
+.jt-tbl tr.jt-tot td small{color:#d6ebe5}
+.jt-empty{padding:36px 10px;text-align:center;color:var(--mut);font-size:14px;line-height:1.9}
 .panel h3{font-size:15px;margin-bottom:14px;color:var(--p)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -350,7 +389,7 @@ function pgHome(){
   const perCab={};MD.forEach(d=>{const c=cabOf(d);(perCab[c]=perCab[c]||[]).push(d)});
   const warn=SES.role!=='admin'&&MD.length===0
     ?`<div class="notif bad">\u26A0 Anda belum di-assign data AO. Hubungi admin untuk mengaitkan data AO dengan akun Anda (menu <b>Pembagian Data AO</b>).</div>`:'';
-  document.getElementById('content').innerHTML=warn+`
+  document.getElementById('content').innerHTML=warn+homeGrid()+`
   <div class="cards">
     <div class="card"><h4>Sudah Angsur</h4><div class="v" style="color:#1c7a43">${MD.filter(d=>d.sudah_angsur).length}</div><div class="s">rekening (periode ini)</div></div>
     <div class="card"><h4>Belum Angsur</h4><div class="v" style="color:var(--red)">${MD.filter(d=>!d.sudah_angsur).length}</div><div class="s">rekening (periode ini)</div></div>
@@ -1628,10 +1667,103 @@ function jtTableHtml(g){
   h+='<tr style="font-weight:700;background:rgba(127,127,127,.14)"><td colspan="'+(cols-2)+'">TOTAL ('+n+' pinjaman)</td><td class="num">'+nf(tp)+'</td><td class="num">'+nf(to)+'</td></tr></table>';
   return h;
 }
+const JT_PAL=['#0e6e5d','#f0a92e','#4c8bb5','#d9722b','#8aa83a','#9b6fb3','#c0392b'];
+function jtShade(hex,f){   /* f<1 = lebih gelap, 1<f<2 = lebih terang */
+  const n=parseInt(hex.slice(1),16);
+  return '#'+[n>>16,(n>>8)&255,n&255].map(v=>{v=f<1?Math.round(v*f):Math.round(v+(255-v)*(f-1));return Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')}).join('');
+}
+function jtChip(tgl){
+  const t=jtParse(tgl);if(!t)return '';
+  const diff=Math.round((new Date(t.y,t.m-1,t.d)-new Date(todayISO()+'T00:00:00'))/86400000);
+  let txt,bg,fg;
+  if(diff<0){const a=-diff;txt='Lewat '+(a<=60?a+' hr':a<=730?Math.round(a/30)+' bln':Math.round(a/365)+' th');bg='#fdecea';fg='#b3261e'}
+  else if(diff===0){txt='Hari ini';bg='#fff1d6';fg='#8a5a00'}
+  else if(diff<=7){txt='H-'+diff;bg='#fff1d6';fg='#8a5a00'}
+  else{txt='H-'+diff;bg='#e3f1ed';fg='#0a4f43'}
+  return '<span class="jt-chip" style="background:'+bg+';color:'+fg+'">'+txt+'</span>';
+}
+/* donat 3D (SVG murni): porsi outstanding per produk */
+function jtDonut(g){
+  const tot=g.reduce((s,x)=>s+x.os,0);
+  if(!(tot>0))return '<p class="mut" style="padding:34px 0;text-align:center">Belum ada outstanding</p>';
+  const cx=150,cy=78,rx=112,ry=52,k=.56,dep=18,f=v=>v.toFixed(1);
+  const pt=(a,sx,sy)=>[cx+sx*Math.cos(a),cy+sy*Math.sin(a)];
+  let a=-Math.PI/2;const sl=[];
+  g.forEach((x,i)=>{if(!(x.os>0))return;let sp=x.os/tot*2*Math.PI;if(sp>2*Math.PI-.002)sp=2*Math.PI-.002;sl.push({a0:a,a1:a+sp,c:JT_PAL[i%JT_PAL.length],x});a+=sp});
+  const path=(s,dy)=>{
+    const o0=pt(s.a0,rx,ry),o1=pt(s.a1,rx,ry),i0=pt(s.a0,rx*k,ry*k),i1=pt(s.a1,rx*k,ry*k),lg=(s.a1-s.a0)>Math.PI?1:0;
+    return 'M'+f(o0[0])+','+f(o0[1]+dy)+' A'+rx+','+ry+' 0 '+lg+' 1 '+f(o1[0])+','+f(o1[1]+dy)+' L'+f(i1[0])+','+f(i1[1]+dy)+' A'+f(rx*k)+','+f(ry*k)+' 0 '+lg+' 0 '+f(i0[0])+','+f(i0[1]+dy)+' Z';
+  };
+  let s='<svg viewBox="0 0 300 '+(cy+ry+dep+14)+'" role="img" aria-label="Porsi outstanding per produk">';
+  s+='<ellipse cx="'+cx+'" cy="'+(cy+dep+ry*.85)+'" rx="'+f(rx*.9)+'" ry="'+f(ry*.4)+'" fill="rgba(14,60,50,.10)"/>';
+  for(let d=dep;d>=1;d-=1.5)sl.forEach(z=>{const c=jtShade(z.c,.62);s+='<path d="'+path(z,d)+'" fill="'+c+'" stroke="'+c+'" stroke-width=".6"/>'});
+  sl.forEach(z=>{s+='<path d="'+path(z,0)+'" fill="'+z.c+'" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>'});
+  s+='<text x="'+cx+'" y="'+(cy+9)+'" text-anchor="middle" font-size="16" font-weight="700" fill="#0a4f43">'+esc(rpS(tot))+'</text>';
+  s+='<text x="'+cx+'" y="'+(cy+22)+'" text-anchor="middle" font-size="10" fill="#7a8a86">outstanding</text></svg>';
+  const leg=g.map((x,i)=>x.os>0?'<span><i style="background:'+JT_PAL[i%JT_PAL.length]+'"></i>'+esc(x.kode)+' \u00B7 '+(x.os/tot<.005?'<1':Math.round(x.os/tot*100))+'%</span>':'').join('');
+  return s+'<div class="jt-leg">'+leg+'</div>';
+}
+/* batang 3D (SVG murni): per minggu (bulan terpilih) / lama lewat jatuh tempo */
+function jtBars(r){
+  let labels,idx;
+  if(r.mode==='lewat'){
+    const ym=parseInt(r.bln.slice(0,4),10)*12+parseInt(r.bln.slice(5,7),10)-1;
+    labels=['1-3 bln','4-6 bln','7-12 bln','>12 bln'];
+    idx=d=>{const t=jtParse(d.tgl_jt),m=ym-(t.y*12+t.m-1);return m<=3?0:m<=6?1:m<=12?2:3};
+  }else{
+    const last=new Date(+r.bln.slice(0,4),+r.bln.slice(5,7),0).getDate();
+    labels=['1-7','8-14','15-21','22-'+last];
+    idx=d=>{const t=jtParse(d.tgl_jt);return t.d<=7?0:t.d<=14?1:t.d<=21?2:3};
+  }
+  const v=[0,0,0,0],c=[0,0,0,0];
+  r.rows.forEach(d=>{const i=idx(d);v[i]+=d.outstanding;c[i]++});
+  const mx=Math.max.apply(null,v);
+  if(!(mx>0))return '<p class="mut" style="padding:34px 0;text-align:center">Belum ada outstanding</p>';
+  const bw=40,dx=14,dy=9;
+  let s='<svg viewBox="0 0 300 190" role="img" aria-label="Outstanding per periode">';
+  s+='<polygon points="8,153 22,144 294,144 280,153" fill="rgba(14,60,50,.07)"/>';
+  v.forEach((val,i)=>{
+    const h=val>0?Math.max(6,Math.round(val/mx*100)):3,x=24+i*66,y=150-h,col=(val===mx)?'#f0a92e':'#0e6e5d',tx=x+(bw+dx)/2;
+    s+='<polygon points="'+x+','+y+' '+(x+dx)+','+(y-dy)+' '+(x+bw+dx)+','+(y-dy)+' '+(x+bw)+','+y+'" fill="'+jtShade(col,1.4)+'"/>';
+    s+='<polygon points="'+(x+bw)+','+y+' '+(x+bw+dx)+','+(y-dy)+' '+(x+bw+dx)+','+(150-dy)+' '+(x+bw)+',150" fill="'+jtShade(col,.7)+'"/>';
+    s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" fill="'+col+'"/>';
+    s+='<text x="'+tx+'" y="'+(y-dy-5)+'" text-anchor="middle" font-size="10" font-weight="700" fill="#1e2b28">'+(val>0?esc(rpS(val)):'-')+'</text>';
+    s+='<text x="'+tx+'" y="168" text-anchor="middle" font-size="10" fill="#4d5d59">'+esc(labels[i])+'</text>';
+    s+='<text x="'+tx+'" y="180" text-anchor="middle" font-size="9" fill="#7a8a86">'+c[i]+' pinj.</text>';
+  });
+  return s+'</svg>';
+}
+/* tabel tampilan layar: ringkas 3 kolom (cocok untuk HP) */
+function jtTableRich(g){
+  const adm=SES&&SES.role==='admin';
+  const tp=g.reduce((s,x)=>s+x.plafond,0),to=g.reduce((s,x)=>s+x.os,0),n=g.reduce((s,x)=>s+x.items.length,0);
+  let h='<table class="jt-tbl">';
+  g.forEach((x,gi)=>{
+    h+='<tr class="jt-g"><td colspan="3"><span class="jt-dot" style="background:'+JT_PAL[gi%JT_PAL.length]+'"></span>'+esc(x.kode)+' \u00B7 '+esc(x.produk)+' <span class="mut">('+x.items.length+')</span></td></tr>';
+    x.items.forEach(d=>{
+      h+='<tr><td class="jt-nm"><b>'+esc(d.nama)+'</b><small>'+esc(d.rekening)+(adm?' \u00B7 '+esc(d.ao):'')+'</small></td>'
+        +'<td class="jt-tg">'+esc(d.tgl_jt)+'<br>'+jtChip(d.tgl_jt)+'</td>'
+        +'<td class="num"><b>'+nf(d.outstanding)+'</b><br><small class="mut">plafond '+nf(d.plafond)+'</small></td></tr>';
+    });
+    h+='<tr class="jt-sub"><td colspan="2">Subtotal '+esc(x.kode)+'</td><td class="num">'+nf(x.os)+'<br><small class="mut">plafond '+nf(x.plafond)+'</small></td></tr>';
+  });
+  h+='<tr class="jt-tot"><td colspan="2">TOTAL \u00B7 '+n+' pinjaman</td><td class="num">'+nf(to)+'<br><small>plafond '+nf(tp)+'</small></td></tr></table>';
+  return h;
+}
 function renderJt(){
   const box=document.getElementById('jtList');if(!box)return;
   const r=jtRows(),g=jtGroups(r.rows);
-  box.innerHTML=r.rows.length?'<div style="overflow-x:auto">'+jtTableHtml(g)+'</div>':'<p class="mut">Tidak ada pinjaman pada periode ini.</p>';
+  const per=document.getElementById('jtPer');if(per)per.textContent=jtPeriode(r);
+  if(!r.rows.length){box.innerHTML='<div class="jt-empty">\uD83C\uDF3F<br>Tidak ada pinjaman pada periode ini.</div>';return}
+  const tp=g.reduce((s,x)=>s+x.plafond,0),to=g.reduce((s,x)=>s+x.os,0);
+  box.innerHTML=
+    '<div class="jt-kpi">'
+    +'<div class="jt-k"><small>Pinjaman</small><b>'+r.rows.length+'</b></div>'
+    +'<div class="jt-k" title="'+esc(rp(to))+'"><small>Outstanding</small><b>'+esc(rpS(to))+'</b></div>'
+    +'<div class="jt-k" title="'+esc(rp(tp))+'"><small>Plafond</small><b>'+esc(rpS(tp))+'</b></div></div>'
+    +'<div class="jt-viz"><div class="jt-v"><h4>Porsi per produk</h4>'+jtDonut(g)+'</div>'
+    +'<div class="jt-v"><h4>'+(r.mode==='lewat'?'Lama lewat jatuh tempo':'Jatuh tempo per minggu')+'</h4>'+jtBars(r)+'</div></div>'
+    +'<div style="overflow-x:auto">'+jtTableRich(g)+'</div>';
 }
 function jtCabLabel(){
   const c=jtVal('jtCab')||(myCabang()!=='all'?myCabang():'');
@@ -1646,10 +1778,11 @@ function pgJt(){
   const cabs=[...new Set(all.map(cabOf))].sort(),aos=[...new Set(all.map(d=>d.ao))].sort();
   const cbName=c=>{const x=CABANGS.find(z=>z.kode===c),d=all.find(z=>cabOf(z)===c);return c+' - '+((x&&x.nama)||(d&&d.cabang_nama)||'')};
   document.getElementById('content').innerHTML=`
-  <div class="panel"><h3>\uD83D\uDCC5 Daftar Pinjaman Jatuh Tempo</h3>
-    <div class="toolbar">
+  <div class="panel">
+    <div class="jt-head"><h3>\uD83D\uDCC5 Daftar Pinjaman</h3><span class="jt-per" id="jtPer"></span></div>
+    <div class="jt-filter">
       <input type="month" id="jtBln" value="${todayISO().slice(0,7)}" onchange="renderJt()">
-      <select id="jtMode" onchange="renderJt()"><option value="bulan">Jatuh tempo di bulan terpilih</option><option value="lewat">Sudah lewat (sebelum bulan terpilih)</option></select>
+      <select id="jtMode" onchange="renderJt()"><option value="bulan">Bulan terpilih</option><option value="lewat">Sudah lewat</option></select>
       ${adm&&cabs.length>1?`<select id="jtCab" onchange="renderJt()"><option value="">Semua cabang</option>${cabs.map(c=>`<option value="${esc(c)}">${esc(cbName(c))}</option>`).join('')}</select>`:''}
       ${adm?`<select id="jtAO" onchange="renderJt()"><option value="">Semua AO</option>${aos.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select>`:''}
       <button class="btn-s" onclick="jtCSV()">\u2B07\uFE0F CSV</button>
@@ -1675,6 +1808,69 @@ function jtCetak(){
   printInit('Daftar Pinjaman Jatuh Tempo','Cabang: '+jtCabLabel()+' \u00B7 Periode: '+jtPeriode(r)+' \u00B7 Dicetak: '+now.toLocaleDateString('id-ID')+' '+now.toLocaleTimeString('id-ID'));
   document.getElementById('printArea').innerHTML+=jtTableHtml(g);
   window.print();
+}
+
+/* ================= BERANDA: MENU IKON 3D ================= */
+function hiG(id,a,b){return '<linearGradient id="'+id+'" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient>'}
+function hiSvg(defs,body){return '<svg viewBox="0 0 64 64" aria-hidden="true"><defs>'+defs+'</defs>'+body+'</svg>'}
+function hiGear(){let t='';for(let i=0;i<8;i++)t+='<rect x="28" y="5" width="8" height="12" rx="2.5" fill="#f08a3c" transform="rotate('+(i*45)+' 32 32)"/>';return t}
+const HOME_ICON={
+  lap:{tint:'#dff3ee',svg:hiSvg(hiG('hl1','#43bfa6','#0e6e5d')+hiG('hl2','#ffe08a','#f0a92e')+hiG('hl3','#ffffff','#d9e8e3'),
+    '<rect x="12" y="10" width="40" height="46" rx="8" fill="url(#hl1)"/><rect x="18" y="17" width="28" height="34" rx="4" fill="url(#hl3)"/>'
+    +'<rect x="23" y="6" width="18" height="10" rx="4" fill="url(#hl2)"/><rect x="23" y="24" width="18" height="3" rx="1.5" fill="#bcd6cf"/><rect x="23" y="31" width="13" height="3" rx="1.5" fill="#bcd6cf"/>'
+    +'<path d="M24 42l5 5 10-11" fill="none" stroke="#0e6e5d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
+    +'<ellipse cx="22" cy="14" rx="9" ry="2.6" fill="#fff" opacity=".28" transform="rotate(-18 22 14)"/>')},
+  out:{tint:'#fff1cf',svg:hiSvg(hiG('ho1','#ffeaa6','#f2b53a')+hiG('ho2','#e39a1a','#b9780f'),
+    [40,31,22].map(y=>'<path d="M16 '+y+'v8a16 6 0 0 0 32 0v-8z" fill="url(#ho2)"/><ellipse cx="32" cy="'+y+'" rx="16" ry="6" fill="url(#ho1)"/><ellipse cx="32" cy="'+y+'" rx="10.5" ry="3.7" fill="none" stroke="#d99a1e" stroke-width="1.3" opacity=".7"/>').join('')
+    +'<ellipse cx="24" cy="20.6" rx="5" ry="1.5" fill="#fff" opacity=".6"/>')},
+  pinj:{tint:'#e0ecff',svg:hiSvg(hiG('hp1','#74b8ff','#2563eb')+hiG('hp2','#82ebb5','#1fa463')+hiG('hp3','#ffffff','#dfeafb'),
+    '<rect x="14" y="6" width="28" height="50" rx="7" fill="url(#hp1)"/><rect x="18" y="13" width="20" height="33" rx="3.5" fill="url(#hp3)"/><rect x="23" y="8.4" width="10" height="2.4" rx="1.2" fill="#fff" opacity=".6"/>'
+    +'<rect x="21" y="19" width="14" height="3" rx="1.5" fill="#b8cff2"/><rect x="21" y="26" width="10" height="3" rx="1.5" fill="#b8cff2"/>'
+    +'<circle cx="43" cy="44" r="12" fill="url(#hp2)"/><path d="M37.5 44.5l4 4 7-8" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>')},
+  jt:{tint:'#ffe6e1',svg:hiSvg(hiG('hj1','#ffffff','#e1eaf3')+hiG('hj2','#ff9382','#d9382b')+hiG('hj3','#a3b1bf','#5b6b7b'),
+    '<rect x="10" y="13" width="44" height="42" rx="9" fill="url(#hj1)"/><path d="M10 22a9 9 0 0 1 9-9h26a9 9 0 0 1 9 9v7H10z" fill="url(#hj2)"/>'
+    +'<rect x="19" y="7" width="6" height="12" rx="3" fill="url(#hj3)"/><rect x="39" y="7" width="6" height="12" rx="3" fill="url(#hj3)"/>'
+    +'<rect x="16" y="34" width="8" height="7" rx="2" fill="#cdd9e4"/><rect x="28" y="34" width="8" height="7" rx="2" fill="#cdd9e4"/><rect x="40" y="34" width="8" height="7" rx="2" fill="#cdd9e4"/>'
+    +'<rect x="16" y="44" width="8" height="7" rx="2" fill="#cdd9e4"/><rect x="28" y="44" width="8" height="7" rx="2" fill="#cdd9e4"/><rect x="39" y="43" width="10" height="9" rx="3" fill="url(#hj2)"/>')},
+  cair:{tint:'#dff5e8',svg:hiSvg(hiG('hc1','#7be0a9','#1c9a5f')+hiG('hc2','#bff2d4','#4cc088'),
+    '<g transform="rotate(10 32 34)"><rect x="8" y="22" width="48" height="26" rx="5" fill="url(#hc2)"/></g>'
+    +'<g transform="rotate(-9 32 34)"><rect x="8" y="19" width="48" height="28" rx="5" fill="url(#hc1)"/><circle cx="32" cy="33" r="8.5" fill="#eafff3" opacity=".92"/>'
+    +'<text x="32" y="36.4" text-anchor="middle" font-size="9.5" font-weight="800" fill="#1c8a5a" font-family="Arial,sans-serif">Rp</text><circle cx="15" cy="33" r="2.2" fill="#eafff3" opacity=".8"/><circle cx="49" cy="33" r="2.2" fill="#eafff3" opacity=".8"/></g>')},
+  up:{tint:'#e0f0ff',svg:hiSvg(hiG('hu1','#96d4ff','#2f7be8'),
+    '<path d="M20 47a9 9 0 0 1-1-18a13 13 0 0 1 25-4a11 11 0 0 1 3 22z" fill="url(#hu1)"/>'
+    +'<path d="M32 43V29M25.5 35L32 28.5L38.5 35" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>'
+    +'<ellipse cx="25" cy="29" rx="6" ry="2" fill="#fff" opacity=".3" transform="rotate(-25 25 29)"/>')},
+  rw:{tint:'#e8eff7',svg:hiSvg(hiG('hr1','#ffffff','#e3ecf4')+hiG('hr2','#63d3b9','#0e8a73')+hiG('hr3','#ffd873','#f0a92e')+hiG('hr4','#94c5ff','#2f7be8'),
+    '<rect x="9" y="11" width="46" height="42" rx="9" fill="url(#hr1)"/><rect x="16" y="33" width="8" height="14" rx="2.5" fill="url(#hr2)"/><rect x="28" y="24" width="8" height="23" rx="2.5" fill="url(#hr3)"/><rect x="40" y="17" width="8" height="30" rx="2.5" fill="url(#hr4)"/>'
+    +'<path d="M14 50h36" stroke="#cdd9e3" stroke-width="2" stroke-linecap="round"/>')},
+  ars:{tint:'#f8ecdb',svg:hiSvg(hiG('ha1','#ecca9f','#bd9160')+hiG('ha2','#f8dfbb','#d6a875'),
+    '<rect x="11" y="28" width="42" height="27" rx="5" fill="url(#ha1)"/><rect x="8" y="15" width="48" height="15" rx="5" fill="url(#ha2)"/><rect x="25" y="36" width="14" height="6" rx="3" fill="#8a6338"/><rect x="11" y="28" width="42" height="3" fill="#000" opacity=".08"/>')},
+  rpt:{tint:'#e6edf4',svg:hiSvg(hiG('hq1','#b9cadb','#5f7e9b')+hiG('hq2','#ffffff','#e0e9f1'),
+    '<rect x="19" y="8" width="26" height="18" rx="3" fill="url(#hq2)"/><rect x="9" y="22" width="46" height="24" rx="7" fill="url(#hq1)"/><rect x="17" y="38" width="30" height="18" rx="3" fill="url(#hq2)"/>'
+    +'<rect x="22" y="43" width="20" height="2.6" rx="1.3" fill="#b8c7d6"/><rect x="22" y="49" width="14" height="2.6" rx="1.3" fill="#b8c7d6"/><circle cx="47" cy="30" r="2.4" fill="#5ee6a0"/>')},
+  sync:{tint:'#dcf3f0',svg:hiSvg(hiG('hs1','#55d6c5','#0e8a8a'),
+    '<circle cx="32" cy="32" r="25" fill="url(#hs1)"/>'
+    +'<path d="M17.5 32a14.5 14.5 0 0 1 24.5-10.5" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/><path d="M45.5 14.5v12.5h-12.5z" fill="#fff" transform="rotate(8 40 22)"/>'
+    +'<path d="M46.5 32a14.5 14.5 0 0 1-24.5 10.5" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/><path d="M18.5 49.5v-12.5h12.5z" fill="#fff" transform="rotate(8 24 42)"/>')},
+  ao:{tint:'#eee6ff',svg:hiSvg(hiG('hv1','#c7a9ff','#7a4fd8')+hiG('hv2','#e5d8ff','#ab8eee'),
+    '<circle cx="43" cy="21" r="7" fill="url(#hv2)"/><path d="M30 49a13 13 0 0 1 26 0z" fill="url(#hv2)"/><circle cx="25" cy="24" r="9" fill="url(#hv1)"/><path d="M8 54a17 17 0 0 1 34 0z" fill="url(#hv1)"/>')},
+  usr:{tint:'#ffe9d8',svg:hiSvg(hiG('hg1','#ffbc7a','#e8731c'),
+    hiGear()+'<circle cx="32" cy="32" r="18" fill="url(#hg1)"/><circle cx="32" cy="32" r="7.5" fill="#fff4e8"/><ellipse cx="24" cy="22" rx="7" ry="2.4" fill="#fff" opacity=".3" transform="rotate(-35 24 22)"/>')}
+};
+function jtCountBulanIni(){
+  const k=+todayISO().slice(0,4)*12+(+todayISO().slice(5,7))-1;
+  return myData().filter(d=>{if(JT_ABAIKAN.includes(d.kode))return false;const t=jtParse(d.tgl_jt);return t&&t.y*12+t.m-1===k}).length;
+}
+function homeGrid(){
+  const nm=String((SES&&SES.nama)||'').trim().split(/\s+/)[0]||'';
+  const cap=nm?nm.charAt(0).toUpperCase()+nm.slice(1).toLowerCase():'';
+  const hr=new Date().getHours(),sapa=hr<11?'Selamat Pagi':hr<15?'Selamat Siang':hr<18?'Selamat Sore':'Selamat Malam';
+  const q=qUnsent(),badge={sync:q.laporan+q.pencairan+Object.keys(QF).length,jt:jtCountBulanIni()};
+  const tiles=getMenus().filter(m=>m.id!=='home'&&HOME_ICON[m.id]).map(m=>{
+    const ic=HOME_ICON[m.id],b=badge[m.id]>0?'<span class="hm-b">'+badge[m.id]+'</span>':'';
+    return '<button type="button" class="hm-i" onclick="go(\''+m.id+'\')"><span class="hm-t" style="background:linear-gradient(150deg,#ffffff,'+ic.tint+')">'+ic.svg+b+'</span><span>'+esc(m.t.replace(/^[^ ]+ /,''))+'</span></button>';
+  }).join('');
+  return '<div class="hm-hello">'+sapa+',<b>'+esc(cap)+'</b></div><div class="hm-grid">'+tiles+'</div>';
 }
 
 /* ================= PENYIMPANAN AMAN & ANTRIAN KIRIM ================= */
