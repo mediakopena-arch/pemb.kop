@@ -185,7 +185,7 @@ tr:hover td{background:#fafcfb}
     <button class="btn-p" onclick="doLogin()">Masuk</button>
     <div class="err" id="lgErr">Username atau password salah!</div>
     <p class="mut" style="margin-top:14px">Gunakan akun yang diberikan admin kantor.</p>
-    <button id="btnInstall" class="btn-s" style="display:none;width:100%;margin-top:10px;font-size:13px" onclick="installApp()">&#128242; Instal Aplikasi di HP ini</button>
+    <button id="btnInstall" class="btn-s" style="display:block;width:100%;margin-top:10px;font-size:13px" onclick="installApp()">&#128242; Instal Aplikasi di HP ini</button>
   </div>
 </div>
 
@@ -2153,6 +2153,7 @@ async function flushQueue(manual){
   }
   window.addEventListener('beforeinstallprompt',function(){setTimeout(function(){buka(false)},2500)});
   window.addEventListener('appinstalled',function(){tutup();catat()});
+  if(std()){var bi=document.getElementById('btnInstall');if(bi)bi.style.display='none'}
   var ua=navigator.userAgent||'';
   if(/iphone|ipad|ipod/i.test(ua)&&!std()){setTimeout(function(){buka(true)},3000)}
 })();
