@@ -124,6 +124,14 @@ tr:hover td{background:#fafcfb}
 .mut{color:var(--mut);font-size:12px}
 .rowflex{display:flex;gap:10px;flex-wrap:wrap}
 .rowflex>*{flex:1;min-width:140px}
+.vz-tiles{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.vz-tile{flex:1 1 calc(50% - 8px);min-width:120px;background:#fff;border:1px solid var(--line);border-left:5px solid var(--p);border-radius:10px;padding:8px 10px;text-align:left;cursor:pointer;font:inherit;color:var(--tx);line-height:1.25}
+.vz-tile:active{background:#f1f7f5}
+.vz-tile small{display:block;font-size:11px;color:var(--mut)}
+.vz-tile b{font-size:20px;display:block}
+.vz-tile em{font-style:normal;font-size:11px;color:var(--mut)}
+.pl-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.pl-row small{display:block;color:var(--mut);font-size:11px}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50}
 .modal .box{background:#fff;border-radius:12px;padding:24px;width:420px;max-width:92vw}
 .notif{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none}
@@ -245,6 +253,12 @@ if(!localStorage.getItem(K.users)) jsave(K.users,[]);
 if(!localStorage.getItem(K.data)) jsave(K.data,SAMPLE_DATA);
 if(!localStorage.getItem(K.lap)) jsave(K.lap,[]);
 let users=jload(K.users,[]), DATA=jload(K.data,[]), LAP=jload(K.lap,[]), SES=jload(K.ses,null);
+const NAME_FIX={'DIMAS RIZKI PUTRA SULISTIO':'DIMAS RIZKI PUTRA SULISTYO'};
+const fx=n=>NAME_FIX[String(n||'').trim().toUpperCase()]||n;
+function fixNames(){
+  try{users.forEach(u=>{u.nama=fx(u.nama)});LAP.forEach(l=>{l.petugas=fx(l.petugas)});if(SES&&SES.nama)SES.nama=fx(SES.nama)}catch(e){}
+}
+fixNames();
 let AOMAP=jload(K.aomap,{});
 let TOKEN=null;try{TOKEN=localStorage.getItem(K.tok)}catch(e){}
 /* bersihkan sisa password polos dari versi lama */
@@ -375,7 +389,7 @@ function getMenus(){
  {id:'home',t:'\uD83C\uDFE0 Beranda'},
  {id:'lap',t:'\uD83D\uDCCB Laporan Harian'},
  {id:'out',t:'\uD83D\uDCB0 Daftar Outstanding'},
- {id:'pinj',t:'\uD83D\uDCD1 Pinjaman & Kondisi Call'},
+ {id:'pinj',t:'\uD83D\uDCD1 Tagihan & Pembiayaan'},
  {id:'jt',t:'\uD83D\uDCC5 Jatuh Tempo'},
  {id:'cair',t:'\uD83D\uDCB5 Laporan Pencairan'},
  ...(SES&&SES.role==='admin'?[{id:'up',t:'\u2B06\uFE0F Upload Data'},{id:'rw',t:'\uD83D\uDCC8 Riwayat Mingguan'},{id:'ars',t:'\uD83D\uDDC4\uFE0F Arsip Upload'}]:[]),
@@ -415,55 +429,21 @@ function pgHome(){
   const perCab={};MD.forEach(d=>{const c=cabOf(d);(perCab[c]=perCab[c]||[]).push(d)});
   const warn=SES.role!=='admin'&&MD.length===0
     ?`<div class="notif bad">\u26A0 Anda belum di-assign data AO. Hubungi admin untuk mengaitkan data AO dengan akun Anda (menu <b>Pembagian Data AO</b>).</div>`:'';
-  document.getElementById('content').innerHTML=warn+homeGrid()+`
-  <div class="cards">
-    <div class="card"><h4>Sudah Angsur</h4><div class="v" style="color:#1c7a43">${MD.filter(d=>d.sudah_angsur).length}</div><div class="s">rekening (periode ini)</div></div>
-    <div class="card"><h4>Belum Angsur</h4><div class="v" style="color:var(--red)">${MD.filter(d=>!d.sudah_angsur).length}</div><div class="s">rekening (periode ini)</div></div>
-    <div class="card"><h4>Total Outstanding ${SES.role==='admin'?'(Semua)':'(Data Saya)'}</h4><div class="v">${rp(totO)}</div><div class="s">${MD.length} rekening aktif</div></div>
-    <div class="card"><h4>Total Tunggakan (TAK Pokok)</h4><div class="v" style="color:var(--red)">${rp(totT)}</div><div class="s">dari ${MD.filter(d=>d.tak_pokok>0).length} rekening menunggak</div></div>
-    <div class="card"><h4>Laporan Saya Hari Ini</h4><div class="v" style="color:var(--blue)">${lapToday.length}</div><div class="s">${tgl}</div></div>
-    <div class="card"><h4>Total Laporan Saya</h4><div class="v">${lapAll.length}</div><div class="s">${SES.role==='admin'?'seluruh petugas':'akumulasi pribadi'}</div></div>
-  </div>
-  <div class="panel"><h3>Rekening per Produk</h3><table>
-    <tr><th>Produk</th><th class="r">Jumlah</th><th class="r">Total Outstanding</th></tr>
-    ${Object.entries(perProd).map(([p,c])=>{
-      const o=MD.filter(d=>d.produk===p).reduce((s,d)=>s+d.outstanding,0);
-      return `<tr style="cursor:pointer" title="Klik untuk lihat daftar nasabah" onclick="openProdFilter('${esc(p)}')">
-        <td>\u25B8 ${esc(p)}</td><td class="num">${c}</td><td class="num">${rp(o)}</td></tr>`}).join('')||'<tr><td colspan="3" class="mut">Belum ada data</td></tr>'}
-  </table>
-  <p class="mut" style="margin-top:6px">\uD83D\uDCA1 Klik nama produk untuk melihat daftar nasabahnya</p>
-  </div>
-  ${(SES.role==='admin'&&myCabang()==='all')?`
-  <div class="panel"><h3>\uD83C\uDFE2 Kendali Cabang <span class="mut">(klik baris cabang untuk membuka datanya)</span></h3>
-  <table>
-    <tr><th>Cabang</th><th class="r">Rekening</th><th class="r">\u2713 Sudah</th><th class="r">\u2717 Belum</th><th class="r">Total Outstanding</th><th class="r">Tunggakan</th></tr>
-    ${Object.entries(perCab).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))).map(([c,list])=>{
-      const sdh=list.filter(d=>d.sudah_angsur).length;
-      return `<tr style="cursor:pointer" title="Klik untuk kelola data cabang ini" data-c="${esc(c)}" onclick="openCabFilter(this.dataset.c)">
-        <td>\uD83C\uDFE2 <b>${esc(list[0].cabang_nama||('Cabang '+c))}</b> <span class="mut">(${esc(c)})</span></td>
-        <td class="num">${list.length}</td>
-        <td class="num" style="color:#1c7a43;font-weight:700">${sdh}</td>
-        <td class="num" style="color:var(--red);font-weight:700">${list.length-sdh}</td>
-        <td class="num">${rp(list.reduce((s,d)=>s+d.outstanding,0))}</td>
-        <td class="num" style="color:var(--red)">${rp(list.reduce((s,d)=>s+Math.max(0,d.tak_pokok),0))}</td></tr>`}).join('')}
-  </table></div>`:''}
-  <div class="panel"><h3>Sebaran Kolektibilitas (Coll)</h3><table>
-    <tr><th>Kolektibilitas</th><th class="r">Jumlah</th><th class="r">Outstanding</th></tr>
-    ${[1,2,3,4,5].map(c=>{
-      const rows=MD.filter(d=>Math.min(5,Math.max(1,d.coll_val||1))===c);
-      return `<tr style="cursor:pointer" title="Klik untuk lihat daftar nasabah" onclick="openCollFilter(${c})">
-      <td><span class="badge ${collClass(c)}">${collLabel(c)}</span></td>
-      <td class="num">${rows.length}</td>
-      <td class="num">${rp(rows.reduce((s,d)=>s+d.outstanding,0))}</td></tr>`}).join('')}
-  </table>
-  <p class="mut" style="margin-top:8px">*Catatan: 0/1 = Lancar, 2 = DPK, 3 = Kurang Lancar, 4 = Diragukan, 5 = Macet</p></div>`;
+  document.getElementById('content').innerHTML=warn+homeGrid();
 }
 
 /* ================= LAPORAN HARIAN ================= */
 function pgLap(){
+  fixNames();
   const tgl=todayISO();
   lpPicked=null;
-  document.getElementById('content').innerHTML=`
+  const lapAll=SES.role==='admin'?LAP:LAP.filter(l=>l.petugas===SES.nama);
+  const lapToday=lapAll.filter(l=>l.tanggal===tglNow()||(l.tanggalISO||'')===todayISO());
+  const lapCards=`<div class="cards">
+    <div class="card"><h4>Laporan Saya Hari Ini</h4><div class="v" style="color:var(--blue)">${lapToday.length}</div><div class="s">${tglNow()}</div></div>
+    <div class="card"><h4>Total Laporan Saya</h4><div class="v">${lapAll.length}</div><div class="s">${SES.role==='admin'?'seluruh petugas':'akumulasi pribadi'}</div></div>
+  </div>`;
+  document.getElementById('content').innerHTML=lapCards+`
   <div class="panel"><h3>Input Laporan Call Harian ${SES.role==='admin'?'':'<span class="mut">(data nasabah Anda)</span>'}</h3>
     <div class="rowflex">
       <div><label>Tanggal</label><input type="date" id="lpTgl" value="${tgl}" data-auto="${tgl}"></div>
@@ -542,6 +522,7 @@ function saveLap(){
 }
 function delLap(id){if(confirm('Hapus laporan ini?')){LAP=LAP.filter(l=>l.id!==id);jsaveLap();if(FOTO_OK){fotoDel(String(id)).catch(()=>{});FOTO_SAVED.delete(String(id))}renderLapList()}}
 function renderLapList(){
+  fixNames();
   const t=document.getElementById('fTgl')?.value,q=(document.getElementById('fQ')?.value||'').toLowerCase();
   let u=document.getElementById('fUser')?.value||'';
   if(SES.role!=='admin')u=SES.nama;
@@ -558,7 +539,7 @@ function renderLapList(){
 
 /* ================= DIAGRAM (SVG murni) ================= */
 const VZ_COLL={1:'#1c9a57',2:'#e0b000',3:'#e07b1a',4:'#c0392b',5:'#4a1512'};
-function vzDonut(items,ctr,sub){
+function vzDonut(items,ctr,sub,clk){
   const tot=items.reduce((a,x)=>a+x.v,0);
   if(!(tot>0))return '<p class="mut" style="padding:34px 0;text-align:center">Belum ada data</p>';
   const cx=150,cy=78,rx=112,ry=52,k=.56,dep=18,f=v=>v.toFixed(1);
@@ -576,6 +557,10 @@ function vzDonut(items,ctr,sub){
   g+='<text x="'+cx+'" y="'+(cy+9)+'" text-anchor="middle" font-size="16" font-weight="700" fill="#0a4f43">'+esc(ctr)+'</text>';
   g+='<text x="'+cx+'" y="'+(cy+22)+'" text-anchor="middle" font-size="10" fill="#7a8a86">'+esc(sub)+'</text></svg>';
   const leg=items.filter(x=>x.v>0).map(x=>'<span><i style="background:'+x.c+'"></i>'+esc(x.l)+' <b>'+x.v.toLocaleString('id-ID')+'</b> \u00B7 '+(x.v/tot<.005?'<1':Math.round(x.v/tot*100))+'%</span>').join('');
+  if(clk){
+    const tl=items.filter(x=>x.v>0).map(x=>'<button type="button" class="vz-tile" style="border-left-color:'+x.c+'" onclick="'+clk+"('"+x.k+"')"+'"><small>'+esc(x.l)+'</small><b style="color:'+x.c+'">'+x.v.toLocaleString('id-ID')+'</b><em>'+(x.v/tot<.005?'<1':Math.round(x.v/tot*100))+'% \u00B7 klik lihat nama</em></button>').join('');
+    return g+'<div class="vz-tiles">'+tl+'</div>';
+  }
   return g+'<div class="jt-leg vz-leg">'+leg+'</div>';
 }
 function vzBars(items,fmt){
@@ -625,18 +610,46 @@ function vzCallCat(d){
   return 1;
 }
 function vzPinjViz(r){
-  const nm=['Belum di-call','Sudah di-call (lainnya)','Janji bayar','Sudah membayar','Tidak diangkat / salah no.'],col=['#c0392b','#4c8bb5','#f0a92e','#1c9a57','#8a8f8d'];
+  const nS=r.filter(d=>d.sudah_angsur).length;
+  const totO=r.reduce((a,d)=>a+(d.outstanding||0),0);
+  const totT=r.reduce((a,d)=>a+(d.tak_pokok>0?d.tak_pokok:0),0);
+  const nT=r.filter(d=>d.tak_pokok>0).length;
+  const nm=['','Lainnya (diangkat, belum janji)','Janji bayar','Sudah membayar','Tidak diangkat / salah no.'],col=['','#4c8bb5','#f0a92e','#1c9a57','#8a8f8d'];
   const cnt=[0,0,0,0,0];r.forEach(d=>cnt[vzCallCat(d)]++);
-  const nS=r.filter(d=>d.sudah_angsur).length,sudahCall=r.length-cnt[0];
-  return '<div class="jt-kpi"><div class="jt-k"><small>\uD83D\uDCCB Pinjaman</small><b>'+r.length.toLocaleString('id-ID')+'</b></div>'
-   +'<div class="jt-k"><small>\uD83D\uDCDE Sudah di-call</small><b>'+sudahCall.toLocaleString('id-ID')+'</b></div>'
-   +'<div class="jt-k"><small>\uD83D\uDD52 Belum di-call</small><b style="color:var(--red)">'+cnt[0].toLocaleString('id-ID')+'</b></div></div>'
-   +'<div class="jt-viz">'
-   +'<div class="jt-v"><h4>\uD83D\uDCDE Kondisi Call Terakhir</h4>'+vzDonut(cnt.map((v,i)=>({l:nm[i],c:col[i],v:v})),r.length?Math.round(sudahCall/r.length*100)+'%':'-','sudah di-call')+'</div>'
-   +'<div class="jt-v"><h4>\u2705 Status Angsuran</h4>'+vzDonut([{l:'Sudah',c:'#1c9a57',v:nS},{l:'Belum',c:'#c0392b',v:r.length-nS}],r.length?Math.round(nS/r.length*100)+'%':'-','sudah angsur')+'</div>'
-   +'<div class="jt-v"><h4>\uD83D\uDCCA Jumlah per Kolektibilitas</h4>'+vzBars(vzCollItems(r,false),v=>v.toLocaleString('id-ID'))+'</div></div>';
+  const called=r.length-cnt[0];
+  const pm={},pk={},pc={};r.forEach(d=>{pm[d.produk]=(pm[d.produk]||0)+(d.outstanding||0);pk[d.produk]=d.kode;pc[d.produk]=(pc[d.produk]||0)+1});
+  const prod=Object.keys(pm).map(k=>({l:k,s:String(pk[k]||k),full:k,v:pm[k]})).sort((a,b)=>b.v-a.v).slice(0,6);
+  let h=`<div class="jt-viz">
+    <div class="jt-v"><h4>\u2705 Status Angsuran</h4>${vzDonut([{l:'Sudah angsur',c:'#1c9a57',v:nS,k:'s1'},{l:'Belum angsur',c:'#c0392b',v:r.length-nS,k:'s0'}],r.length?Math.round(nS/r.length*100)+'%':'-','sudah angsur','pinjShow')}</div>
+    <div class="jt-v"><h4>\uD83D\uDCDE Kondisi Call</h4>${vzDonut([1,2,3,4].map(i=>({l:nm[i],c:col[i],v:cnt[i],k:'c'+i})),String(called),'hasil call','pinjShow')}</div>
+  </div>
+  <div class="cards">
+    <div class="card"><h4>Total Outstanding</h4><div class="v">${rp(totO)}</div><div class="s">${r.length} rekening aktif</div></div>
+    <div class="card"><h4>Total Tunggakan (TAK Pokok)</h4><div class="v" style="color:var(--red)">${rp(totT)}</div><div class="s">dari ${nT} rekening menunggak</div></div>
+  </div>
+  <div class="jt-viz">
+    <div class="jt-v"><h4>\uD83D\uDCCA Jumlah per Kolektibilitas</h4>${vzBars(vzCollItems(r,false),v=>v.toLocaleString('id-ID'))}</div>
+    <div class="jt-v"><h4>\uD83D\uDCCA Outstanding per Produk</h4>${vzBars(prod,rpS)}</div>
+  </div>`;
+  h+=`<div class="panel"><h3>Rekening per Produk</h3><table>
+    <tr><th>Produk</th><th class="r">Jumlah</th><th class="r">Total Outstanding</th></tr>
+    ${Object.keys(pm).sort((a,b)=>pm[b]-pm[a]).map(p=>`<tr style="cursor:pointer" title="Klik untuk lihat daftar nasabah" onclick="openProdFilter('${esc(p)}')"><td>\u25B8 ${esc(p)}</td><td class="num">${pc[p]}</td><td class="num">${rp(pm[p])}</td></tr>`).join('')||'<tr><td colspan="3" class="mut">Belum ada data</td></tr>'}
+  </table><p class="mut" style="margin-top:6px">\uD83D\uDCA1 Klik nama produk untuk melihat daftar nasabahnya</p></div>`;
+  if(SES.role==='admin'&&myCabang()==='all'){
+    const perCab={};r.forEach(d=>{const c=cabOf(d);(perCab[c]=perCab[c]||[]).push(d)});
+    h+=`<div class="panel"><h3>\uD83C\uDFE2 Kendali Cabang <span class="mut">(klik baris cabang untuk membuka datanya)</span></h3><table>
+    <tr><th>Cabang</th><th class="r">Rekening</th><th class="r">\u2713 Sudah</th><th class="r">\u2717 Belum</th><th class="r">Total Outstanding</th><th class="r">Tunggakan</th></tr>
+    ${Object.entries(perCab).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))).map(([c,list])=>{
+      const sdh=list.filter(d=>d.sudah_angsur).length;
+      return `<tr style="cursor:pointer" title="Klik untuk kelola data cabang ini" data-c="${esc(c)}" onclick="openCabFilter(this.dataset.c)"><td>\uD83C\uDFE2 <b>${esc(list[0].cabang_nama||('Cabang '+c))}</b> <span class="mut">(${esc(c)})</span></td><td class="num">${list.length}</td><td class="num" style="color:#1c7a43;font-weight:700">${sdh}</td><td class="num" style="color:var(--red);font-weight:700">${list.length-sdh}</td><td class="num">${rp(list.reduce((a,d)=>a+d.outstanding,0))}</td><td class="num" style="color:var(--red)">${rp(list.reduce((a,d)=>a+Math.max(0,d.tak_pokok),0))}</td></tr>`}).join('')}
+    </table></div>`;
+  }
+  h+=`<div class="panel"><h3>Sebaran Kolektibilitas (Coll)</h3><table>
+    <tr><th>Kolektibilitas</th><th class="r">Jumlah</th><th class="r">Outstanding</th></tr>
+    ${[1,2,3,4,5].map(c=>{const rows=r.filter(d=>collOf(d)===c);return `<tr style="cursor:pointer" title="Klik untuk lihat daftar nasabah" onclick="openCollFilter(${c})"><td><span class="badge ${collClass(c)}">${collLabel(c)}</span></td><td class="num">${rows.length}</td><td class="num">${rp(rows.reduce((a,d)=>a+d.outstanding,0))}</td></tr>`}).join('')}
+  </table><p class="mut" style="margin-top:8px">*Catatan: 0/1 = Lancar, 2 = DPK, 3 = Kurang Lancar, 4 = Diragukan, 5 = Macet</p></div>`;
+  return h;
 }
-
 /* ================= DAFTAR OUTSTANDING ================= */
 function pgOut(){
   const aos=[...new Set(myData().map(d=>d.ao))].sort();
@@ -709,44 +722,45 @@ function exportCSV(){
   a.download='daftar_outstanding.csv';a.click();
 }
 
-/* ================= PINJAMAN & KONDISI CALL ================= */
+/* ================= TAGIHAN & PEMBIAYAAN ================= */
 function pgPinj(){
   const aos=[...new Set(myData().map(d=>d.ao))].sort();
   document.getElementById('content').innerHTML=`
-  <div class="panel"><h3>📞 Daftar Pinjaman & Kondisi Call ${SES.role==='admin'?'':'<span class="mut">(data AO Anda)</span>'}</h3>
+  <div class="panel"><h3>📞 Daftar Tagihan & Pembiayaan ${SES.role==='admin'?'':'<span class="mut">(data AO Anda)</span>'}</h3>
     <div class="toolbar">
       <input placeholder="cari nama / rekening..." id="pQ" onkeyup="renderPinj()">
       <select id="pAO" onchange="renderPinj()"><option value="">Semua AO</option>${aos.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
-      <select id="pCall" onchange="renderPinj()"><option value="">Semua Kondisi Call</option>
-        <option value="sudah">Sudah di-call bulan ini</option><option value="belum">Belum di-call bulan ini</option>
-        <option value="janji">Janji bayar</option><option value="bayar">Sudah membayar</option>
-        <option value="nores">Tidak diangkat / salah nomor</option></select>
-      <select id="pStatus" onchange="renderPinj()"><option value="">Semua Status Angsur</option>
-        <option value="1">\u2713 Sudah angsur</option><option value="0">\u2717 Belum angsur</option></select>
     </div>
-    <div id="pinjViz" class="vz-wrap"></div>
-    <div id="pinjList"></div>
-  </div>`;
+  </div>
+  <div id="pinjViz" class="vz-wrap"></div>
+  <div class="panel"><div id="pinjList"></div></div>`;
   renderPinj();
+}
+function pinjShow(k){
+  const r=window.PINJ_R||[];
+  const t=k[0],i=+k.slice(1);
+  const lab={s1:'Sudah angsur',s0:'Belum angsur',c1:'Lainnya (diangkat, belum janji)',c2:'Janji bayar',c3:'Sudah membayar',c4:'Tidak diangkat / salah no.'}[k]||'';
+  const list=r.filter(d=>t==='s'?(d.sudah_angsur?1:0)===i:vzCallCat(d)===i);
+  let m=document.getElementById('mdlPinjList');
+  if(!m){m=document.createElement('div');m.className='modal';m.id='mdlPinjList';
+    m.onclick=e=>{if(e.target===m)m.style.display='none'};document.body.appendChild(m)}
+  m.innerHTML='<div class="box" style="width:560px;max-height:82vh;overflow:auto;padding:16px">'
+   +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px"><h3 style="color:var(--p)">'+esc(lab)+' <span class="mut">('+list.length+')</span></h3>'
+   +'<button class="btn-s" type="button" onclick="document.getElementById(\'mdlPinjList\').style.display=\'none\'">Tutup</button></div>'
+   +(list.length?list.map(d=>'<div class="pl-row"><div><b>'+esc(d.nama)+'</b><small>'+esc(d.rekening)+' \u00B7 '+esc(d.ao)+'</small></div><div style="text-align:right"><b>'+rp(d.outstanding)+'</b>'+(d.tak_pokok>0?'<small style="color:var(--red)">tunggak '+rp(d.tak_pokok)+'</small>':'')+'</div></div>').join(''):'<p class="mut">Tidak ada data</p>')
+   +'</div>';
+  m.style.display='flex';
 }
 function lastCall(rek){return LAP.find(l=>l.rekening===rek)}
 function renderPinj(){
   const q=(document.getElementById('pQ').value||'').toLowerCase();
-  const ao=document.getElementById('pAO').value,f=document.getElementById('pCall').value;
-  const ps=document.getElementById('pStatus').value;
-  const bulanIni=todayISO().slice(0,7);
+  const ao=document.getElementById('pAO').value;
   let r=myData().filter(d=>{
     if(q&&!(d.nama.toLowerCase().includes(q)||d.rekening.includes(q)))return false;
     if(ao&&d.ao!==ao)return false;
-    if(ps&&(d.sudah_angsur?1:0)!=ps)return false;
-    const lc=lastCall(d.rekening);const called=lc&&(lc.tanggalISO||'').slice(0,7)===bulanIni;
-    if(f==='sudah'&&!called)return false;
-    if(f==='belum'&&called)return false;
-    if(f==='janji'&&!(lc&&lc.hasil==='Janji bayar'))return false;
-    if(f==='bayar'&&!(lc&&lc.hasil==='Sudah membayar'))return false;
-    if(f==='nores'&&!(lc&&(lc.hasil.includes('tidak diangkat')||lc.hasil.includes('salah'))))return false;
     return true;
   }).sort((a,b)=>b.outstanding-a.outstanding);
+  window.PINJ_R=r;
   const nSdh2=r.filter(d=>d.sudah_angsur).length;
   document.getElementById('pinjViz').innerHTML=vzPinjViz(r);
   document.getElementById('pinjList').innerHTML=`<p class="mut" style="margin-bottom:8px">${r.length} rekening \u00B7 <b style="color:#1c7a43">\u2713 ${nSdh2} sudah angsur</b> \u00B7 <b style="color:var(--red)">\u2717 ${r.length-nSdh2} belum</b></p>
@@ -1165,7 +1179,7 @@ function pgAO(){
     <ol style="margin-left:18px;font-size:13px;line-height:1.9">
       <li>Upload file tagihan \u2192 sistem otomatis memecah data berdasarkan kolom <b>Nama AO</b>.</li>
       <li>Di halaman ini, admin memilih <b>akun petugas</b> untuk tiap AO.</li>
-      <li>Saat petugas login, ia hanya melihat: Beranda, Laporan Harian, Outstanding, dan Pinjaman & Call milik AO-nya saja.</li>
+      <li>Saat petugas login, ia hanya melihat: Beranda, Laporan Harian, Outstanding, dan Tagihan & Pembiayaan milik AO-nya saja.</li>
       <li>Tombol <b>Auto-kaitkan</b> mencocokkan nama AO dengan nama akun petugas secara otomatis.</li>
     </ol>
   </div>`;
