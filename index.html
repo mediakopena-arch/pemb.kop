@@ -96,6 +96,18 @@ main{margin-left:230px;padding:24px}
 .vz-bar .n{flex:0 0 auto;min-width:54px;text-align:right;font-weight:700;color:var(--pd);font-variant-numeric:tabular-nums}
 .vz-pl{margin-top:8px;font-size:11px;color:#4d5d59;line-height:1.5}.vz-pl i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px}.vz-pl b{color:var(--tx)}
 .vz-leg b{font-weight:700;color:var(--tx)}
+
+#instPop{position:fixed;left:12px;right:12px;bottom:14px;z-index:9999;max-width:460px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 14px 36px -8px rgba(10,79,67,.45);padding:14px 14px 12px;display:none;animation:instUp .35s ease}
+@keyframes instUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+#instPop .ip-h{display:flex;gap:11px;align-items:center}
+#instPop .ip-i{flex:0 0 46px;height:46px;border-radius:12px;background:var(--p);color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center}
+#instPop b{display:block;font-size:15px;color:var(--pd)}
+#instPop small{display:block;font-size:12px;color:var(--mut);margin-top:2px;line-height:1.4}
+#instPop .ip-s{margin:10px 0 0;font-size:12.5px;line-height:1.6;color:#4d5d59;background:#f3f8f6;border-radius:10px;padding:8px 10px}
+#instPop .ip-b{display:flex;gap:8px;margin-top:11px}
+#instPop .ip-b button{flex:1;padding:10px;font-size:14px;border-radius:10px;border:0;cursor:pointer;font-weight:600}
+#instPop .ip-y{background:var(--p);color:#fff}
+#instPop .ip-n{background:#edf2f1;color:#4d5d59}
 .jt-empty{padding:36px 10px;text-align:center;color:var(--mut);font-size:14px;line-height:1.9}
 .panel h3{font-size:15px;margin-bottom:14px;color:var(--p)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -2118,6 +2130,31 @@ async function flushQueue(manual){
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&SES)flushQueue()});
   setInterval(()=>{if(SES&&!document.hidden)flushQueue()},45000);
   setTimeout(()=>{if(SES&&TOKEN)flushQueue()},2500);
+})();
+</script>
+<script>
+/* Pop-up ajakan instal aplikasi (Android: sekali tap, iPhone: petunjuk manual) */
+(function(){
+  var KEY='kopena_inst_tunda',HARI=7;
+  function std(){return window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true}
+  function tunda(){try{return Date.now()-(+localStorage.getItem(KEY)||0)<HARI*864e5}catch(e){return false}}
+  function catat(){try{localStorage.setItem(KEY,String(Date.now()))}catch(e){}}
+  function tutup(){var b=document.getElementById('instPop');if(b)b.style.display='none'}
+  function buka(ios){
+    if(std()||tunda()||document.getElementById('instPop'))return;
+    var d=document.createElement('div');d.id='instPop';
+    d.innerHTML='<div class="ip-h"><div class="ip-i">&#128242;</div><div><b>Instal aplikasi Kopena</b><small>Buka lebih cepat dari layar utama HP, tampil layar penuh seperti aplikasi biasa.</small></div></div>'
+      +(ios?'<div class="ip-s">Di iPhone: ketuk tombol <b style="display:inline">Bagikan</b> (kotak dengan panah) di Safari, lalu pilih <b style="display:inline">Tambah ke Layar Utama</b> (Add to Home Screen).</div>':'')
+      +'<div class="ip-b">'+(ios?'':'<button class="ip-y" id="instYa">Instal</button>')+'<button class="ip-n" id="instNanti">'+(ios?'Mengerti':'Nanti saja')+'</button></div>';
+    document.body.appendChild(d);d.style.display='block';
+    document.getElementById('instNanti').onclick=function(){catat();tutup()};
+    var y=document.getElementById('instYa');
+    if(y)y.onclick=function(){tutup();if(typeof installApp==='function')installApp()};
+  }
+  window.addEventListener('beforeinstallprompt',function(){setTimeout(function(){buka(false)},2500)});
+  window.addEventListener('appinstalled',function(){tutup();catat()});
+  var ua=navigator.userAgent||'';
+  if(/iphone|ipad|ipod/i.test(ua)&&!std()){setTimeout(function(){buka(true)},3000)}
 })();
 </script>
 <script>
