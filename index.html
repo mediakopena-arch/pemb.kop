@@ -311,6 +311,7 @@ function getMenus(){
  {id:'lap',t:'\uD83D\uDCCB Laporan Harian'},
  {id:'out',t:'\uD83D\uDCB0 Daftar Outstanding'},
  {id:'pinj',t:'\uD83D\uDCD1 Pinjaman & Kondisi Call'},
+ {id:'jt',t:'\uD83D\uDCC5 Jatuh Tempo'},
  {id:'cair',t:'\uD83D\uDCB5 Laporan Pencairan'},
  ...(SES&&SES.role==='admin'?[{id:'up',t:'\u2B06\uFE0F Upload Data'},{id:'rw',t:'\uD83D\uDCC8 Riwayat Mingguan'},{id:'ars',t:'\uD83D\uDDC4\uFE0F Arsip Upload'}]:[]),
  {id:'rpt',t:'\uD83D\uDDA8\uFE0F Laporan'},
@@ -328,7 +329,7 @@ function go(id){
   PAGE=id;
   document.querySelectorAll('nav a, .mnav a').forEach(a=>a.classList.toggle('active',a.dataset.id===id));
   document.getElementById('pageTitle').textContent=getMenus().find(m=>m.id===id)?.t.replace(/^[^ ]+ /,'')||'';
-  ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,rpt:pgRpt,sync:pgSync,ao:pgAO,usr:pgUsr,rw:pgRw,ars:pgArs,cair:pgCair})[id]();
+  ({home:pgHome,lap:pgLap,out:pgOut,pinj:pgPinj,up:pgUp,rpt:pgRpt,sync:pgSync,ao:pgAO,usr:pgUsr,rw:pgRw,ars:pgArs,cair:pgCair,jt:pgJt})[id]();
   window.scrollTo(0,0);
   if(id==='sync')tampilPenyimpanan();
 }
@@ -1169,7 +1170,7 @@ async function syncPull(manual){
     if(full&&j.aomap&&typeof j.aomap==='object'&&!QF.aomap){AOMAP=j.aomap;jsave(K.aomap,AOMAP)}
     if(full&&Array.isArray(j.cabangs)&&j.cabangs.length&&!QF.cabangs){CABANGS=j.cabangs;jsave(KCAB,CABANGS)}
     SYNC_INFO=j.updatedAt;
-    if(manual||!['lap','up','cair'].includes(PAGE))go(PAGE||'home');else if(PAGE==='cair'&&typeof renderCairList==='function')renderCairList();
+    if(manual||!['lap','up','cair','jt'].includes(PAGE))go(PAGE||'home');else if(PAGE==='cair'&&typeof renderCairList==='function')renderCairList();else if(PAGE==='jt'&&typeof renderJt==='function')renderJt();
     if(manual)notify('Sinkronisasi berhasil \u2714 data terbaru dimuat');
   }catch(err){if(manual)notify('Gagal tarik data: '+err.message,false)}
 }
@@ -1585,6 +1586,97 @@ function krmLaporanWA(){
   msg+='\n_Foto kunjungan terlampir di aplikasi / ekspor gambar._';
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 }
+/* ================= DAFTAR PINJAMAN JATUH TEMPO ================= */
+const JT_ABAIKAN=['111'];   /* kode produk yang bukan pinjaman (111 = Simpanan Manasuka) */
+const BULAN_ID=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const nf=n=>(n||0).toLocaleString('id-ID');
+function jtParse(s){const m=String(s||'').match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);return m?{d:+m[1],m:+m[2],y:+m[3]}:null}
+const jtKey=d=>{const t=jtParse(d.tgl_jt);return t?t.y*10000+t.m*100+t.d:0};
+const jtVal=id=>{const el=document.getElementById(id);return el?el.value:''};
+function jtRows(){
+  let bln=jtVal('jtBln');if(!/^\d{4}-\d{2}$/.test(bln))bln=todayISO().slice(0,7);
+  const mode=jtVal('jtMode')||'bulan',cab=jtVal('jtCab'),ao=jtVal('jtAO');
+  const ym=parseInt(bln.slice(0,4),10)*12+parseInt(bln.slice(5,7),10)-1;
+  const rows=myData().filter(d=>{
+    if(JT_ABAIKAN.includes(d.kode))return false;
+    if(cab&&cabOf(d)!==cab)return false;
+    if(ao&&d.ao!==ao)return false;
+    const t=jtParse(d.tgl_jt);if(!t)return false;
+    const k=t.y*12+t.m-1;
+    return mode==='lewat'?(k<ym&&d.outstanding>0):k===ym;
+  });
+  rows.sort((a,b)=>String(a.kode).localeCompare(String(b.kode))||(jtKey(a)-jtKey(b))||String(a.rekening).localeCompare(String(b.rekening)));
+  return {rows,bln,mode};
+}
+function jtGroups(rows){
+  const g=[],idx={};
+  rows.forEach(d=>{const k=d.kode+'|'+d.produk;if(!(k in idx)){idx[k]=g.length;g.push({kode:d.kode,produk:d.produk,items:[]})}g[idx[k]].items.push(d)});
+  g.forEach(x=>{x.plafond=x.items.reduce((s,d)=>s+d.plafond,0);x.os=x.items.reduce((s,d)=>s+d.outstanding,0)});
+  return g;
+}
+function jtTableHtml(g){
+  const adm=SES&&SES.role==='admin',cols=adm?7:6;
+  const tp=g.reduce((s,x)=>s+x.plafond,0),to=g.reduce((s,x)=>s+x.os,0),n=g.reduce((s,x)=>s+x.items.length,0);
+  let h='<table><tr><th>No</th><th>Nomor Pinjaman</th><th>Nama</th><th>Tgl.J.Tempo</th>'+(adm?'<th>AO</th>':'')+'<th class="r">Plafond</th><th class="r">Outstanding</th></tr>';
+  g.forEach(x=>{
+    h+='<tr><td colspan="'+cols+'" style="font-weight:700;background:rgba(127,127,127,.14)">'+esc(x.kode)+' / '+esc(x.produk)+'</td></tr>';
+    x.items.forEach((d,i)=>{
+      h+='<tr><td>'+(i+1)+'</td><td>'+esc(d.rekening)+'</td><td>'+esc(d.nama)+'</td><td>'+esc(d.tgl_jt)+'</td>'+(adm?'<td>'+esc(d.ao)+'</td>':'')+'<td class="num">'+nf(d.plafond)+'</td><td class="num">'+nf(d.outstanding)+'</td></tr>';
+    });
+    h+='<tr style="font-weight:700"><td colspan="'+(cols-2)+'">Subtotal '+esc(x.kode)+' ('+x.items.length+' pinjaman)</td><td class="num">'+nf(x.plafond)+'</td><td class="num">'+nf(x.os)+'</td></tr>';
+  });
+  h+='<tr style="font-weight:700;background:rgba(127,127,127,.14)"><td colspan="'+(cols-2)+'">TOTAL ('+n+' pinjaman)</td><td class="num">'+nf(tp)+'</td><td class="num">'+nf(to)+'</td></tr></table>';
+  return h;
+}
+function renderJt(){
+  const box=document.getElementById('jtList');if(!box)return;
+  const r=jtRows(),g=jtGroups(r.rows);
+  box.innerHTML=r.rows.length?'<div style="overflow-x:auto">'+jtTableHtml(g)+'</div>':'<p class="mut">Tidak ada pinjaman pada periode ini.</p>';
+}
+function jtCabLabel(){
+  const c=jtVal('jtCab')||(myCabang()!=='all'?myCabang():'');
+  if(!c)return 'Semua cabang';
+  const x=CABANGS.find(z=>z.kode===c),d=DATA.find(z=>cabOf(z)===c);
+  return c+' - '+((x&&x.nama)||(d&&d.cabang_nama)||'');
+}
+function jtPeriode(r){const p=r.bln.split('-');return BULAN_ID[+p[1]-1]+' '+p[0]+(r.mode==='lewat'?' (sudah lewat jatuh tempo)':'')}
+function pgJt(){
+  const adm=SES.role==='admin';
+  const all=myData().filter(d=>!JT_ABAIKAN.includes(d.kode));
+  const cabs=[...new Set(all.map(cabOf))].sort(),aos=[...new Set(all.map(d=>d.ao))].sort();
+  const cbName=c=>{const x=CABANGS.find(z=>z.kode===c),d=all.find(z=>cabOf(z)===c);return c+' - '+((x&&x.nama)||(d&&d.cabang_nama)||'')};
+  document.getElementById('content').innerHTML=`
+  <div class="panel"><h3>\uD83D\uDCC5 Daftar Pinjaman Jatuh Tempo</h3>
+    <div class="toolbar">
+      <input type="month" id="jtBln" value="${todayISO().slice(0,7)}" onchange="renderJt()">
+      <select id="jtMode" onchange="renderJt()"><option value="bulan">Jatuh tempo di bulan terpilih</option><option value="lewat">Sudah lewat (sebelum bulan terpilih)</option></select>
+      ${adm&&cabs.length>1?`<select id="jtCab" onchange="renderJt()"><option value="">Semua cabang</option>${cabs.map(c=>`<option value="${esc(c)}">${esc(cbName(c))}</option>`).join('')}</select>`:''}
+      ${adm?`<select id="jtAO" onchange="renderJt()"><option value="">Semua AO</option>${aos.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select>`:''}
+      <button class="btn-s" onclick="jtCSV()">\u2B07\uFE0F CSV</button>
+      <button class="btn-s" onclick="jtCetak()">\uD83D\uDDA8\uFE0F Cetak</button>
+    </div>
+    <div id="jtList"></div>
+  </div>`;
+  renderJt();
+}
+function jtCSV(){
+  const r=jtRows(),g=jtGroups(r.rows),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  let csv='\ufeffProduk;No;No. Pinjaman;Nama;Tgl.J.Tempo;AO;Plafond;Outstanding\n';
+  g.forEach(x=>{
+    x.items.forEach((d,i)=>{csv+=[q(x.kode+' / '+x.produk),i+1,q("'"+d.rekening),q(d.nama),q(d.tgl_jt),q(d.ao),d.plafond,d.outstanding].join(';')+'\n'});
+    csv+=[q('Subtotal '+x.kode),'','','','','',x.plafond,x.os].join(';')+'\n';
+  });
+  csv+=[q('TOTAL'),'','','','','',g.reduce((s,x)=>s+x.plafond,0),g.reduce((s,x)=>s+x.os,0)].join(';')+'\n';
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='jatuh-tempo-'+r.bln+'.csv';
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
+}
+function jtCetak(){
+  const r=jtRows(),g=jtGroups(r.rows),now=new Date();
+  printInit('Daftar Pinjaman Jatuh Tempo','Cabang: '+jtCabLabel()+' \u00B7 Periode: '+jtPeriode(r)+' \u00B7 Dicetak: '+now.toLocaleDateString('id-ID')+' '+now.toLocaleTimeString('id-ID'));
+  document.getElementById('printArea').innerHTML+=jtTableHtml(g);
+  window.print();
+}
+
 /* ================= PENYIMPANAN AMAN & ANTRIAN KIRIM ================= */
 /* --- peringatan & ukuran penyimpanan --- */
 let _lsPct=0,_warned=false;
