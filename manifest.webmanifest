@@ -1,5 +1,7 @@
 {
   "id": "./",
+  "lang": "id",
+  "dir": "ltr",
   "name": "KOPENA - Sistem Tagihan Mitra Usaha",
   "short_name": "KOPENA",
   "description": "Sistem tagihan mitra usaha KOPENA Pembiayaan",
