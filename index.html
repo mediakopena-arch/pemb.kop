@@ -243,6 +243,14 @@ nav a svg{flex:0 0 18px}
   #bnav a.active{color:var(--pd)}
   #bnav a.active .bi{background:linear-gradient(160deg,#c9f1e3,#9fe3cb);box-shadow:inset 0 1px 0 rgba(255,255,255,.8)}
 }
+
+/* ===== perbaikan tabel menumpuk di HP: sel tidak dipecah per huruf, tabel digeser ke samping ===== */
+.tbl-w{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.tbl-w table{width:max-content;min-width:100%}
+.tbl-w table td,.tbl-w table th{white-space:nowrap;overflow-wrap:normal!important;word-break:normal!important}
+.tbl-w table td.wrapok{white-space:normal;min-width:180px}
+.pb-ao{margin-bottom:14px}
+.pb-ao summary{cursor:pointer;padding:10px 12px;background:#f1f8f5;border-radius:10px;font-size:14px}
 #printArea{display:none}
 @media print{
   body *{visibility:hidden}
@@ -788,7 +796,7 @@ function bhPanel(r){
   return '<div class="panel"><h3>\uD83D\uDCB0 Bagi Hasil Masuk</h3>'
    +'<div class="cards" style="margin-bottom:12px"><div class="card"><h4>Total bagi hasil masuk</h4><div class="v" style="color:#1c7a43">'+rp(tot)+'</div><div class="s">dari '+n+' rekening yang sudah angsur</div></div>'
    +'<div class="card"><h4>Masuk hari ini</h4><div class="v">'+(dl==null?'-':rp(dl))+'</div><div class="s">'+(dl==null?'muncul setelah 2 kali upload data (data baru)':'selisih dari upload sebelumnya \u00B7 tgl data '+esc(fmtTgl(tg)))+'</div></div></div>'
-   +'<div style="overflow-x:auto"><table><tr><th>Produk</th><th class="r">Rek.</th><th class="r">Bagi hasil</th></tr>'+row(pp)+'</table></div>'
+   +'<div class="tbl-w" style="overflow-x:auto"><table><tr><th>Produk</th><th class="r">Rek.</th><th class="r">Bagi hasil</th></tr>'+row(pp)+'</table></div>'
    +'<div style="overflow-x:auto;margin-top:12px"><table><tr><th>AO</th><th class="r">Rek.</th><th class="r">Bagi hasil</th></tr>'+row(pa)+'</table></div>'
    +'<p class="mut" style="margin-top:6px">Produk 111 tidak dihitung. Produk 551 (tempo): seluruh setoran dihitung bagi hasil.</p></div>';
 }
@@ -885,7 +893,7 @@ function renderOut(){
   const nSdh=r.filter(d=>d.sudah_angsur).length;
   document.getElementById('outViz').innerHTML=vzOutViz(r);
   document.getElementById('outList').innerHTML=`<p class="mut" style="margin-bottom:8px">${r.length} rekening \u00B7 <b style="color:#1c7a43">\u2713 ${nSdh} sudah angsur</b> \u00B7 <b style="color:var(--red)">\u2717 ${r.length-nSdh} belum</b> \u00B7 Total outstanding: <b>${rp(tot)}</b> \u00B7 Total tunggakan: <b style="color:var(--red)">${rp(tott)}</b></p>
-  <div style="overflow-x:auto"><table>
+  <div class="tbl-w" style="overflow-x:auto"><table>
    <tr><th>No. Rekening</th><th>Nama</th><th>Produk</th><th>AO</th><th class="r">Plafond</th><th class="r">Outstanding</th>
    <th class="r">Tunggakan Awal</th><th class="r">Tagihan Aktif</th><th class="r">Tunggakan Akhir</th><th class="r">Bln</th><th>Coll</th><th>Status</th><th>Tgl JT</th></tr>
    ${r.map(d=>`<tr><td>${esc(d.rekening)}</td><td>${esc(d.nama)}</td><td>${esc(d.kode)} \u2014 ${esc(d.produk)}</td><td>${esc(d.ao)}</td>
@@ -913,12 +921,34 @@ function pgPinj(){
   <div class="panel"><h3>📞 Daftar Tagihan & Pembiayaan ${SES.role==='admin'?'':'<span class="mut">(data AO Anda)</span>'}</h3>
     <div class="toolbar">
       <input placeholder="cari nama / rekening..." id="pQ" onkeyup="renderPinj()">
-      <select id="pAO" onchange="renderPinj()"><option value="">Semua AO</option>${aos.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
+      <select id="pAO" onchange="renderPinj();renderPbBaru()"><option value="">Semua AO</option>${aos.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
     </div>
   </div>
+  <div class="panel"><h3>\uD83C\uDD95 Pembiayaan Baru <span class="mut">(otomatis, per AO)</span></h3>
+    <div class="toolbar"><input type="month" id="pbBln" value="${todayISO().slice(0,7)}" onchange="renderPbBaru()" title="Bulan terdeteksi"></div>
+    <div id="pbBaru"></div></div>
   <div id="pinjViz" class="vz-wrap"></div>
   <div class="panel"><div id="pinjList"></div></div>`;
-  renderPinj();
+  renderPinj();renderPbBaru();
+}
+
+function pbBaruList(r){
+  const bln=(document.getElementById('pbBln')||{}).value||'';
+  return r.filter(d=>d.baru_tgl&&isPembiayaan(d)&&(!bln||d.baru_tgl.slice(0,7)===bln));
+}
+function renderPbBaru(){
+  const box=document.getElementById('pbBaru');if(!box)return;
+  const ao=(document.getElementById('pAO')||{}).value||'';
+  const list=pbBaruList(myData().filter(d=>!ao||d.ao===ao));
+  if(!list.length){box.innerHTML='<p class="mut">Belum ada pembiayaan baru terdeteksi pada bulan ini. Terhitung otomatis setiap kali data baru diupload (nama nasabah yang belum ada di data sebelumnya).</p>';return}
+  const per={};list.forEach(d=>{(per[d.ao]=per[d.ao]||[]).push(d)});
+  const aoKeys=Object.keys(per).sort((a,b)=>per[b].length-per[a].length);
+  const totP=list.reduce((s,d)=>s+(d.plafond||0),0);
+  box.innerHTML=`<p style="margin:6px 0"><b>${list.length}</b> pembiayaan baru \u00B7 <b>${aoKeys.length}</b> AO \u00B7 total plafond <b>${rp(totP)}</b></p>`
+   +aoKeys.map(a=>{const g=per[a].slice().sort((x,y)=>(y.plafond||0)-(x.plafond||0));
+     return `<details class="pb-ao" open><summary><b>${esc(a)}</b> \u2014 ${g.length} nasabah \u00B7 plafond ${rp(g.reduce((s,d)=>s+(d.plafond||0),0))}</summary>
+     <div class="tbl-w" style="overflow-x:auto"><table><tr><th>No. Rekening</th><th>Nama</th><th>Produk</th><th class="r">Plafond</th><th class="r">Outstanding</th><th>Tgl terdeteksi</th></tr>
+     ${g.map(d=>`<tr><td>${esc(d.rekening)}</td><td>${esc(d.nama)}</td><td>${esc(d.kode)} \u2014 ${esc(d.produk)}</td><td class="num">${rp(d.plafond)}</td><td class="num">${rp(d.outstanding)}</td><td>${esc(fmtTgl(d.baru_tgl))}</td></tr>`).join('')}</table></div></details>`}).join('');
 }
 function pinjShow(k){
   const r=window.PINJ_R||[];
@@ -948,7 +978,7 @@ function renderPinj(){
   const nSdh2=r.filter(d=>d.sudah_angsur).length;
   document.getElementById('pinjViz').innerHTML=vzPinjViz(r);
   document.getElementById('pinjList').innerHTML=`<p class="mut" style="margin-bottom:8px">${r.length} rekening \u00B7 <b style="color:#1c7a43">\u2713 ${nSdh2} sudah angsur</b> \u00B7 <b style="color:var(--red)">\u2717 ${r.length-nSdh2} belum</b></p>
-  <div style="overflow-x:auto"><table>
+  <div class="tbl-w" style="overflow-x:auto"><table>
    <tr><th>Rekening</th><th>Nama</th><th>Produk</th><th>AO</th><th class="r">Outstanding</th><th class="r">Tunggakan</th>
    <th class="r">Bln</th><th>Coll</th><th>Status</th><th>Kondisi Call Terakhir</th><th>Tgl Call</th><th>Petugas</th></tr>
    ${r.map(d=>{const lc=lastCall(d.rekening);return `<tr>
@@ -958,7 +988,7 @@ function renderPinj(){
      <td class="num">${d.tak_bln||0}</td>
      <td><span class="badge ${collClass(d.coll_val)}">${collLabel(d.coll_val)}</span></td>
      <td><span class="badge ${d.sudah_angsur?'b1':'b4'}">${d.sudah_angsur?'\u2713 Sudah':'\u2717 Belum'}</span></td>
-     <td>${lc?esc(lc.hasil):'<span class="badge b4">BELUM DI-CALL</span>'}</td>
+     <td class="wrapok">${lc?esc(lc.hasil):'<span class="badge b4">BELUM DI-CALL</span>'}</td>
      <td>${lc?esc(lc.tanggal):'-'}</td><td>${lc?esc(lc.petugas):'-'}</td></tr>`}).join('')}</table></div>`;
 }
 
@@ -979,6 +1009,20 @@ function pgUp(){
     <div id="upMsg"></div>
     <p class="mut" style="margin-top:14px">Kolom yang dibaca: No. Rekening, Nama, Plafond, Outstanding, Coll, Tunggakan Awal (Pokok/Margin/Bln), Tagihan Aktif (Pokok/Margin), Tagihan Masuk (Pokok/Margin), Tunggakan Akhir (Pokok/Bln), Tgl JT, Nama AO, serta grup produk (mis. 541 / PEMBIAYAAN MURABAHAH ANGSURAN).</p>
   </div>`;
+}
+
+/* ===== Pembiayaan baru otomatis: nama nasabah yang tidak ada di data lama tetapi ada di data baru ===== */
+const normNama=n=>String(n||'').toUpperCase().replace(/\s+/g,' ').trim();
+const isPembiayaan=d=>String(d.kode||'')!=='111';   // simpanan (111) bukan pembiayaan
+function tandaiBaru(oldR,newR,tgl){
+  const lama=new Map();oldR.forEach(o=>lama.set(normNama(o.nama),o));
+  const bln=(tgl||todayISO()).slice(0,7);
+  newR.forEach(d=>{
+    delete d.baru_tgl;
+    const o=lama.get(normNama(d.nama));
+    if(o){ if(o.baru_tgl&&o.baru_tgl.slice(0,7)===bln)d.baru_tgl=o.baru_tgl; }   // tetap terhitung baru dalam bulan yang sama
+    else if(oldR.length)d.baru_tgl=tgl||todayISO();
+  });
 }
 function doUpload(){
   const f=document.getElementById('upFile').files[0];
@@ -1005,6 +1049,7 @@ function doUpload(){
       const isSample=DATA.length===SAMPLE_DATA.length&&DATA[0]&&DATA[0].rekening===SAMPLE_DATA[0].rekening;
       const old=isSample?[]:DATA.filter(d=>cabs.has(cabOf(d)));
       const df=old.length?diffRows(old,rows):null;
+      tandaiBaru(old,rows,tglData);
       DATA=(isSample?[]:DATA.filter(d=>!cabs.has(cabOf(d)))).concat(rows);
       jsave(K.data,DATA);
       cabs.forEach(cb=>saveRiwayat(cb,rows.filter(r=>cabOf(r)===cb),df,tglData));
@@ -1132,7 +1177,7 @@ function renderCairList(){
   const perJ={};rows.forEach(r=>{const o=perJ[r.jenis]=perJ[r.jenis]||{n:0,t:0};o.n++;o.t+=r.nominal});
   box.innerHTML=rows.length?`<p style="margin:6px 0"><b>${rows.length}</b> pencairan \u00B7 total <b>${rp(tot)}</b>
     ${Object.keys(perJ).map(k=>`<span class="badge b1" style="margin-left:6px">${esc(k)}: ${perJ[k].n} \u00B7 ${rp(perJ[k].t)}</span>`).join('')}</p>
-    <div style="overflow-x:auto"><table><tr><th>Tanggal</th><th>AO</th><th>No. Rekening</th><th>Nama Lengkap</th><th class="r">Nominal</th><th>Jangka</th><th>Jenis</th><th></th></tr>
+    <div class="tbl-w" style="overflow-x:auto"><table><tr><th>Tanggal</th><th>AO</th><th>No. Rekening</th><th>Nama Lengkap</th><th class="r">Nominal</th><th>Jangka</th><th>Jenis</th><th></th></tr>
     ${rows.map(r=>`<tr><td>${esc(fmtTgl(r.tanggalISO))}</td><td>${esc(r.petugas)}</td><td>${esc(r.rekening)}</td><td>${esc(r.nama)}</td>
       <td class="num">${rp(r.nominal)}</td><td>${r.jangka} ${esc(r.satuan)}</td><td>${esc(r.jenis)}</td>
       <td>${(SES.role==='admin'||r.user===SES.user)?`<button class="btn-d" data-id="${esc(r.id)}" onclick="delCair(this.dataset.id)">\u2715</button>`:''}</td></tr>`).join('')}</table></div>`
@@ -1175,7 +1220,7 @@ async function pgArs(){
   document.getElementById('content').innerHTML=`<div class="panel"><h3>\uD83D\uDDC4\uFE0F Arsip Upload</h3>
   <p class="mut" style="margin-bottom:10px">Setiap upload tersimpan terpisah menurut <b>cabang + tanggal data</b>, jadi upload minggu atau bulan berikutnya tidak menimpa yang lama. Arsip ada di browser perangkat ini \u2014 simpan juga salinan unduhannya di tempat aman (Google Drive / flashdisk).</p>
   ${err?`<div class="notif bad" style="display:block">\u26A0 ${esc(err)}</div>`:''}
-  ${list.length?`<div style="overflow-x:auto"><table><tr><th>Tanggal data</th><th>Cabang</th><th class="r">Rekening</th><th>Diupload</th><th>File asal</th><th>Drive</th><th></th></tr>
+  ${list.length?`<div class="tbl-w" style="overflow-x:auto"><table><tr><th>Tanggal data</th><th>Cabang</th><th class="r">Rekening</th><th>Diupload</th><th>File asal</th><th>Drive</th><th></th></tr>
   ${list.map(a=>`<tr><td><b>${esc(a.tgl)}</b></td><td>${esc(a.cab)} \u2014 ${esc(a.nama)}</td><td class="num">${a.n}</td><td>${esc(new Date(a.savedAt).toLocaleString('id-ID'))}</td><td class="mut">${esc(a.file||'')}</td><td>${a.drive?'\u2601\uFE0F \u2714':`<button class="btn-s" data-k="${esc(a.key)}" onclick="arsipKirim(this.dataset.k)">\u2601\uFE0F Kirim</button>`}</td>
     <td style="white-space:nowrap"><button class="btn-s" data-k="${esc(a.key)}" onclick="arsipUnduh(this.dataset.k)">\u2B07\uFE0F Unduh</button>
     <button class="btn-a" data-k="${esc(a.key)}" onclick="arsipPulih(this.dataset.k)">\u21A9\uFE0F Jadikan data aktif</button>
@@ -1195,7 +1240,7 @@ async function driveDaftar(){
   const box=document.getElementById('drvList');box.innerHTML='<p class="mut">Memuat\u2026</p>';
   try{const j=await apiCall('arsip');
     if(!j.ok||!Array.isArray(j.arsip))throw new Error(j.error||'server belum diperbarui (pasang Code.gs v3)');
-    box.innerHTML=j.arsip.length?`<div style="overflow-x:auto"><table><tr><th>Tanggal data</th><th>Cabang</th><th>Nama file</th><th class="r">Ukuran</th><th></th></tr>
+    box.innerHTML=j.arsip.length?`<div class="tbl-w" style="overflow-x:auto"><table><tr><th>Tanggal data</th><th>Cabang</th><th>Nama file</th><th class="r">Ukuran</th><th></th></tr>
     ${j.arsip.map(x=>`<tr><td><b>${esc(x.tgl)}</b></td><td>${esc(x.cab)}</td><td>${esc(x.name)}${x.lama?' <span class="badge b2">versi lama</span>':''}</td><td class="num">${Math.round(x.size/1024)} KB</td>
     <td style="white-space:nowrap"><a href="${esc(x.url)}" target="_blank" rel="noopener">Buka di Drive</a>
     <button class="btn-a" data-id="${esc(x.id)}" onclick="driveMuat(this.dataset.id)">\u21A9\uFE0F Jadikan data aktif</button></td></tr>`).join('')}</table></div>`:'<p class="mut">Belum ada arsip di Drive.</p>'
@@ -1260,7 +1305,7 @@ function ringkasDiff(e){
 function tblDiff(title,rows,cols,fmt){
   if(!rows.length)return '';
   return `<details style="margin:6px 0"><summary><b>${title}</b> (${rows.length}${rows.length>=200?'+':''})</summary>
-  <div style="overflow-x:auto"><table><tr><th>Rekening</th><th>Nama</th><th>AO</th><th>${cols[0]}</th><th>${cols[1]}</th></tr>
+  <div class="tbl-w" style="overflow-x:auto"><table><tr><th>Rekening</th><th>Nama</th><th>AO</th><th>${cols[0]}</th><th>${cols[1]}</th></tr>
   ${rows.slice(0,200).map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${fmt(r[3])}</td><td>${fmt(r[4])}</td></tr>`).join('')}</table></div></details>`;
 }
 function pgRw(){
@@ -1270,7 +1315,7 @@ function pgRw(){
     const rev=list.slice().reverse();
     const last=list[list.length-1];
     return `<div class="panel"><h3>\uD83C\uDFE2 ${esc(cb)} \u2014 ${esc(last.nama)}</h3>
-    <div style="overflow-x:auto"><table><tr><th>Tgl upload</th><th class="r">Rek.</th><th class="r">Outstanding</th><th class="r">Tunggakan</th>
+    <div class="tbl-w" style="overflow-x:auto"><table><tr><th>Tgl upload</th><th class="r">Rek.</th><th class="r">Outstanding</th><th class="r">Tunggakan</th>
       <th class="r">Coll 1</th><th class="r">Coll 2</th><th class="r">Coll 3</th><th class="r">Coll 4</th><th class="r">Coll 5</th><th class="r">Sudah angsur</th></tr>
     ${rev.map((r,i)=>{const p=rev[i+1];const s=r.s,q=p&&p.s;
       return `<tr><td>${esc(r.tgl)}</td><td class="num">${s.n}${fmtDiff(s.n,q&&q.n,false)}</td>
@@ -1342,7 +1387,7 @@ function pgAO(){
       <button class="btn-a" onclick="autoMatchAO()">\u26A1 Auto-kaitkan (AO = nama akun)</button>
       <span class="mut">Petugas yang login hanya melihat data AO yang dikaitkan dengan akunnya.</span>
     </div>
-    <div style="overflow-x:auto"><table>
+    <div class="tbl-w" style="overflow-x:auto"><table>
     <tr><th>Nama AO (di data)</th><th>Cabang</th><th class="r">Rekening</th><th class="r">\u2713 Sudah / \u2717 Belum</th><th class="r">Total Outstanding</th><th class="r">Tunggakan</th><th>Di-assign ke Akun</th></tr>
     ${aos.map(a=>{
       const rows=VIS.filter(d=>d.ao===a);
