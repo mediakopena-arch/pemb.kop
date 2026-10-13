@@ -250,7 +250,7 @@ nav a svg{flex:0 0 18px}
 .tbl-w table td,.tbl-w table th{white-space:nowrap;overflow-wrap:normal!important;word-break:normal!important}
 .tbl-w table td.wrapok{white-space:normal;min-width:200px}
 .cair-cards{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 12px}
-.cair-cards .cc{flex:1 1 130px;border-radius:14px;padding:12px 14px;background:#f4faf7;border:1px solid var(--line)}
+.cair-cards .cc{flex:1 1 120px;border-radius:14px;padding:12px 14px;background:#f4faf7;border:1px solid var(--line)}
 .cair-cards .cc small{display:block;color:var(--mut);font-size:12px}
 .cair-cards .cc b{display:block;font-size:22px;margin-top:2px}
 #printArea{display:none}
@@ -990,51 +990,6 @@ function pgUp(){
     <p class="mut" style="margin-top:14px">Kolom yang dibaca: No. Rekening, Nama, Plafond, Outstanding, Coll, Tunggakan Awal (Pokok/Margin/Bln), Tagihan Aktif (Pokok/Margin), Tagihan Masuk (Pokok/Margin), Tunggakan Akhir (Pokok/Bln), Tgl JT, Nama AO, serta grup produk (mis. 541 / PEMBIAYAAN MURABAHAH ANGSURAN).</p>
   </div>`;
 }
-
-/* ===== Deteksi otomatis: Baru murni, Akad ulang, Lunas murni (bandingkan upload lama vs baru) ===== */
-const normNama=n=>String(n||'').toUpperCase().replace(/\s+/g,' ').trim();
-const isPembiayaan=d=>String(d.kode||'')!=='111';          // simpanan (111) bukan pembiayaan
-const OS_LUNAS=1000;                                        // OS <= ini dianggap lunas (sisa pembulatan)
-const seqOf=rek=>parseInt(String(rek).slice(-6),10)||0;
-function klasifikasiMutasi(oldR,newR){
-  const oldMap=new Map(oldR.map(d=>[d.rekening,d])),newMap=new Map(newR.map(d=>[d.rekening,d]));
-  const key=d=>normNama(d.nama)+'|'+normNama(d.ao);
-  // calon rekening "lama" (sudah lunas): OS<=OS_LUNAS di data baru, atau hilang dari data baru
-  const lamaPool=new Map();
-  const tambah=(d,os)=>{const k=key(d);if(!lamaPool.has(k))lamaPool.set(k,[]);lamaPool.get(k).push({rek:d.rekening,kode:d.kode,nama:d.nama,ao:d.ao,os:os,plafond:d.plafond,cabang:cabOf(d)})};
-  newR.forEach(d=>{if(isPembiayaan(d)&&(d.outstanding||0)<=OS_LUNAS){const o=oldMap.get(d.rekening);tambah(d,o?(o.outstanding||0):0)}});
-  oldR.forEach(o=>{if(isPembiayaan(o)&&!newMap.has(o.rekening))tambah(o,o.outstanding||0)});
-  const dipakai=new Set(),res={baru:[],akad:[],lunas:[]};
-  newR.filter(d=>isPembiayaan(d)&&!oldMap.has(d.rekening)&&(d.plafond||0)>0).sort((a,b)=>seqOf(a.rekening)-seqOf(b.rekening)).forEach(b=>{
-    const cand=(lamaPool.get(key(b))||[]).filter(c=>c.rek!==b.rekening&&!dipakai.has(c.rek));
-    let pick=cand.filter(c=>c.kode===b.kode&&seqOf(c.rek)<seqOf(b.rekening)).sort((x,y)=>seqOf(y.rek)-seqOf(x.rek))[0]
-          ||cand.filter(c=>c.kode!==b.kode).sort((x,y)=>seqOf(y.rek)-seqOf(x.rek))[0];
-    if(pick){dipakai.add(pick.rek);res.akad.push({d:b,lama:pick})}else res.baru.push({d:b})
-  });
-  // lunas murni: pernah ada OS > 0, kini hilang / OS<=batas, dan bukan bagian dari akad ulang
-  oldR.forEach(o=>{
-    if(!isPembiayaan(o)||(o.outstanding||0)<=OS_LUNAS||dipakai.has(o.rekening))return;
-    const n=newMap.get(o.rekening);
-    if(!n||(n.outstanding||0)<=OS_LUNAS)res.lunas.push({d:o})
-  });
-  return res;
-}
-function jenisDari(d){const p=String(d.produk||'');return /MURABAHAH/i.test(p)?'Murabahah':/MUSYARAKAH/i.test(p)?'Musyarakah Berjangka':(p||('Produk '+d.kode))}
-function jangkaBln(d,tgl){const t=jtParse(d.tgl_jt);if(!t||!tgl)return 0;const [y,m]=tgl.split('-').map(Number);return Math.max(0,(t.y*12+t.m)-(y*12+m))}
-function simpanMutasi(res,tgl){
-  const ada=new Set(PENC.filter(r=>!r.kat&&!r.dihapus).map(r=>r.rekening));   // rekening yang sudah diinput manual
-  const id=(k,rek)=>'auto-'+k+'-'+rek;const have=new Map(PENC.map(r=>[r.id,r]));
-  const n={baru:0,akad:0,lunas:0};
-  const add=(kat,d,extra)=>{const i=id(kat,d.rekening);const ex=have.get(i);if(ex&&!ex._reset)return;if(kat!=='lunas'&&ada.has(d.rekening))return;
-    n[kat]++;const rec=Object.assign({id:i,upd:Date.now(),tanggalISO:tgl,user:'auto',petugas:d.ao,cabang:cabOf(d),kat:kat,rekening:d.rekening,nama:d.nama,
-      nominal:kat==='lunas'?(d.outstanding||0):(d.plafond||0),jangka:kat==='lunas'?0:jangkaBln(d,tgl),satuan:'bulan',jenis:jenisDari(d)},extra||{});
-    if(ex){Object.keys(ex).forEach(k=>delete ex[k]);Object.assign(ex,rec)}else{PENC.push(rec);have.set(i,rec)}};
-  res.baru.forEach(x=>add('baru',x.d));
-  res.akad.forEach(x=>add('akad',x.d,{rekLama:x.lama.rek,osLama:x.lama.os,topup:(x.d.plafond||0)-(x.lama.os||0)}));
-  res.lunas.forEach(x=>add('lunas',x.d));
-  if(n.baru+n.akad+n.lunas){jsave(KCAIR,PENC);syncPush('pencairan',true)}
-  return n;
-}
 function doUpload(){
   const f=document.getElementById('upFile').files[0];
   if(!f){notify('Pilih file dulu!',false);return}
@@ -1058,18 +1013,10 @@ function doUpload(){
           document.getElementById('upMsg').innerHTML='<div class="notif bad">Upload dibatalkan \u2014 arsip cabang '+esc(cb)+' tanggal '+esc(tglData)+' tidak diubah. Data aktif juga tidak berubah.</div>';return}
       }
       const isSample=DATA.length===SAMPLE_DATA.length&&DATA[0]&&DATA[0].rekening===SAMPLE_DATA[0].rekening;
-      /* Pembanding otomatis dari arsip: cabang yang sama, tanggal data < tglData, yang paling dekat (urutan upload diabaikan) */
-      let old=[];const pemb=[];
-      for(const cb of cabs){
-        const prior=await arsipCariSebelum(cb,tglData);
-        if(prior&&Array.isArray(prior.rows)&&prior.rows.length){old=old.concat(prior.rows);pemb.push({cb:cb,tgl:prior.tgl,n:prior.rows.length})}
-        else if(!isSample&&!(await arsipAdaCabang(cb))){            /* belum ada arsip sama sekali: pakai data aktif sebagai pembanding */
-          const aktif=DATA.filter(d=>cabOf(d)===cb);if(aktif.length){old=old.concat(aktif);pemb.push({cb:cb,tgl:'data aktif',n:aktif.length})}}
-      }
+      const old=isSample?[]:DATA.filter(d=>cabs.has(cabOf(d)));
       const df=old.length?diffRows(old,rows):null;
       DATA=(isSample?[]:DATA.filter(d=>!cabs.has(cabOf(d)))).concat(rows);
       jsave(K.data,DATA);
-      let mut=null;if(old.length){try{mut=simpanMutasi(klasifikasiMutasi(old,rows),tglData)}catch(err){mut={err:err.message}}}
       cabs.forEach(cb=>saveRiwayat(cb,rows.filter(r=>cabOf(r)===cb),df,tglData));
       let arsipMsg='';
       try{for(const cb of cabs){const rr=rows.filter(r=>cabOf(r)===cb);
@@ -1087,13 +1034,8 @@ function doUpload(){
         document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);arsipMsg+=' \u2022 salinan diunduh: '+nm}
       const nAO=new Set(rows.map(r=>r.ao)).size;
       document.getElementById('upMsg').innerHTML=`<div class="notif ok">\u2714 Berhasil! ${rows.length} rekening dimuat, <b>otomatis terbagi ke ${nAO} kelompok AO</b>. Lanjutkan di menu <b>Pembagian Data AO</b> untuk mengaitkan ke akun petugas.</div>`;
-      document.getElementById('upMsg').innerHTML+=pemb.length?'<div class="notif ok" style="display:block;margin-top:8px">\uD83D\uDD0D Pembanding otomatis: '+pemb.map(x=>'<b>'+esc(x.cb)+'</b> \u2190 '+esc(x.tgl)+' ('+x.n+' rek) vs data baru ('+rows.filter(r=>cabOf(r)===x.cb).length+' rek)').join(' \u00B7 ')+'</div>'
-        :'<div class="notif ok" style="display:block;margin-top:8px">\uD83D\uDD0D Belum ada arsip lebih awal dari '+esc(tglData)+' \u2014 deteksi mutasi dilewati untuk tanggal ini.</div>';
       const rw=RIWAYAT.filter(r=>cabs.has(r.cabang)&&r.tgl===tglData);
       document.getElementById('upMsg').innerHTML+=rw.map(r=>`<div class="notif ok" style="display:block;margin-top:8px">\uD83D\uDCC8 <b>${esc(r.cabang)} ${esc(r.nama)}</b> vs upload sebelumnya: ${ringkasDiff(r)}</div>`).join('')+'<p class="mut" style="margin-top:6px">Detail: menu <b>Riwayat Mingguan</b>.</p>';
-      document.getElementById('upMsg').innerHTML+=mut&&!mut.err?'<div class="notif ok" style="display:block;margin-top:8px">\uD83D\uDCB5 Laporan Pencairan otomatis: <b>'+mut.baru+'</b> baru murni \u00B7 <b>'+mut.akad+'</b> akad ulang \u00B7 <b>'+mut.lunas+'</b> lunas murni. Lihat di menu <b>Laporan Pencairan</b>.</div>'
-        :mut?'<div class="notif bad" style="display:block;margin-top:8px">Deteksi pencairan gagal: '+esc(mut.err)+'</div>'
-        :'';
       document.getElementById('upMsg').innerHTML+='<div class="notif ok" style="display:block;margin-top:8px">'+esc(arsipMsg)+'</div>';
       notify('Data berhasil diupload \u2714');
       syncPush('data',true);
@@ -1109,13 +1051,12 @@ const parseNom=s=>parseInt(String(s||'').replace(/\D/g,''),10)||0;
 const fmtTgl=iso=>iso?new Date(iso+'T00:00:00').toLocaleDateString('id-ID'):'';
 function fmtNomInput(el){const n=parseNom(el.value);el.value=n?n.toLocaleString('id-ID'):''}
 function cairVisible(){
-  const mine=r=>String(r.petugas).toUpperCase()===String(SES.nama).toUpperCase()||AOMAP[r.petugas]===SES.user;
-  return PENC.filter(r=>!r.dihapus&&(SES.role==='admin'?(myCabang()==='all'||r.cabang===myCabang()):(r.kat?mine(r):r.user===SES.user)));
+  return PENC.filter(r=>!r.dihapus&&(SES.role==='admin'?(myCabang()==='all'||r.cabang===myCabang()):r.user===SES.user));
 }
-const katOf=r=>r.kat||'manual';
-const KAT_LBL={manual:'\u270D\uFE0F Manual',baru:'\uD83C\uDD95 Baru murni',akad:'\uD83D\uDD04 Akad ulang',lunas:'\uD83D\uDFE2 Lunas murni'};
 /* Draf form pencairan: tersimpan otomatis saat mengetik, supaya tidak hilang jika halaman dimuat ulang / aplikasi ditutup */
-const CAIR_FIELDS=['cNama','cRek','cNom','cJk','cSat','cJenis','cJenisLain'];
+const CAIR_FIELDS=['cNama','cRek','cNom','cJk','cSat','cJenis','cJenisLain','cKet'];
+const KET_LBL={baru:'\uD83C\uDD95 Pinjaman baru',akad:'\uD83D\uDD04 Akad ulang'};
+const ketOf=r=>r.ket||'';
 const cairDraftKey=()=>'kk_cair_draft_'+((SES&&SES.user)||'');
 function cairDraftSave(){
   try{
@@ -1155,6 +1096,7 @@ function pgCair(){
       <div><label>Nominal pencairan (Rp)</label><input id="cNom" inputmode="numeric" placeholder="0" oninput="fmtNomInput(this)" autocomplete="off"></div>
       <div><label>Jangka waktu</label>
         <div style="display:flex;gap:6px"><input id="cJk" type="number" min="1" inputmode="numeric" placeholder="12" style="width:90px"><select id="cSat"><option value="bulan">bulan</option><option value="hari">hari</option><option value="tahun">tahun</option></select></div></div>
+      <div><label>Keterangan</label><select id="cKet"><option value="">\u2014 pilih \u2014</option><option value="baru">Pinjaman baru</option><option value="akad">Akad ulang</option></select></div>
       <div><label>Jenis pembiayaan</label><select id="cJenis" onchange="document.getElementById('cJenisLain').style.display=this.value==='__lain'?'block':'none'">
         <option value="">\u2014 pilih jenis \u2014</option>
         ${JENIS_CAIR.map(j=>`<option>${esc(j)}</option>`).join('')}<option value="__lain">Lainnya\u2026</option></select>
@@ -1166,15 +1108,23 @@ function pgCair(){
     <div class="toolbar">
       <input type="month" id="fcBln" value="${tgl.slice(0,7)}" onchange="renderCairList()" title="Kosongkan untuk semua bulan">
       ${SES.role==='admin'?`<select id="fcAO" onchange="renderCairList()"><option value="">Semua AO</option>${aos.map(a=>`<option>${esc(a)}</option>`).join('')}</select>`:''}
-      <select id="fcKat" onchange="renderCairList()"><option value="">Semua pencairan</option><option value="baru">\uD83C\uDD95 Baru murni</option><option value="akad">\uD83D\uDD04 Akad ulang</option><option value="manual">\u270D\uFE0F Manual</option><option value="lunas">\uD83D\uDFE2 Lunas murni</option></select>
-      <select id="fcJenis" onchange="renderCairList()"><option value="">Semua jenis</option>${[...new Set(JENIS_CAIR.concat(cairVisible().map(r=>r.jenis)))].map(j=>`<option>${esc(j)}</option>`).join('')}</select>
+      <select id="fcKet" onchange="renderCairList()"><option value="">Semua keterangan</option><option value="baru">Pinjaman baru</option><option value="akad">Akad ulang</option></select>
+      <select id="fcJenis" onchange="renderCairList()"><option value="">Semua jenis</option>${JENIS_CAIR.map(j=>`<option>${esc(j)}</option>`).join('')}</select>
       <button class="btn-s" onclick="cairCSV()">\u2B07\uFE0F CSV</button>
-      ${SES.role==='admin'?`<button class="btn-s" onclick="deteksiUlangOtomatis()" title="Bandingkan 2 arsip & isi ulang daftar pencairan otomatis">\uD83D\uDD04 Deteksi Ulang</button>`:''}
       <button class="btn-s" onclick="cairCetak()">\uD83D\uDDA8\uFE0F Cetak</button>
     </div>
     <div id="cairList"></div>
+  </div>
+  <div class="panel"><h3>\uD83D\uDFE2 Daftar Nasabah Lunas <span class="mut">(outstanding 0)</span></h3>
+    <div class="toolbar">
+      <input id="lnQ" placeholder="cari nama / rekening..." onkeyup="renderLunas()">
+      <select id="lnAO" onchange="renderLunas()"><option value="">Semua AO</option>${[...new Set(lunasRows().map(d=>d.ao))].sort().map(a=>`<option>${esc(a)}</option>`).join('')}</select>
+      <select id="lnSort" onchange="renderLunas()"><option value="ao">Urut: AO, nama</option><option value="nama">Urut: Nama</option><option value="plaf">Urut: Plafond \u2193</option><option value="jt">Urut: Tgl JT</option></select>
+      <button class="btn-s" onclick="lunasCSV()">\u2B07\uFE0F CSV</button>
+    </div>
+    <div id="lunasList"></div>
   </div>`;
-  renderCairList();cairDraftInit();
+  renderCairList();renderLunas();cairDraftInit();
 }
 function saveCair(){
   const g=id=>document.getElementById(id).value.trim();
@@ -1186,11 +1136,12 @@ function saveCair(){
   if(nom<=0){notify('Nominal harus lebih dari 0',false);return}
   if(jk<=0){notify('Jangka waktu wajib diisi',false);return}
   if(!jenis){notify('Pilih jenis pembiayaan',false);return}
+  const ket=g('cKet');if(!ket){notify('Pilih keterangan: Pinjaman baru atau Akad ulang',false);return}
   const dup=PENC.find(r=>!r.dihapus&&r.rekening===rek);
   if(dup&&!confirm('Nomor rekening '+rek+' sudah pernah dilaporkan ('+dup.nama+', '+fmtTgl(dup.tanggalISO)+', '+rp(dup.nominal)+').\nTetap simpan sebagai pencairan baru?'))return;
   const cb=(SES.cabang&&SES.cabang!=='all')?SES.cabang:cabOf({rekening:rek});
   PENC.push({id:Date.now()+'-'+Math.random().toString(36).slice(2,6),upd:Date.now(),tanggalISO:tgl,user:SES.user,petugas:SES.nama,cabang:cb,
-    rekening:rek,nama:nama,nominal:nom,jangka:jk,satuan:g('cSat'),jenis:jenis});
+    rekening:rek,nama:nama,nominal:nom,jangka:jk,satuan:g('cSat'),jenis:jenis,ket:ket});
   jsave(KCAIR,PENC);syncPush('pencairan',true);
   notify('Pencairan tersimpan \u2714');cairDraftClear();pgCair();
 }
@@ -1199,35 +1150,57 @@ function cairBase(){
   return cairVisible().filter(r=>(!b||r.tanggalISO.slice(0,7)===b)&&(!a||r.petugas===a)&&(!j||r.jenis===j));
 }
 function cairFiltered(){
-  const k=(document.getElementById('fcKat')||{}).value||'';
-  return cairBase().filter(r=>k?katOf(r)===k:katOf(r)!=='lunas')
+  const k=(document.getElementById('fcKet')||{}).value||'';
+  return cairBase().filter(r=>!k||ketOf(r)===k)
     .sort((x,y)=>(x.petugas||'').localeCompare(y.petugas||'')||(x.tanggalISO<y.tanggalISO?1:x.tanggalISO>y.tanggalISO?-1:y.upd-x.upd));
 }
-const cairKet=r=>r.kat==='akad'?'Rek. lama '+r.rekLama+' \u00B7 OS lama '+rp(r.osLama)+' \u00B7 Top-up '+rp(r.topup):r.kat==='lunas'?'OS terakhir '+rp(r.nominal):'';
 function renderCairList(){
   const rows=cairFiltered();const box=document.getElementById('cairList');if(!box)return;
-  const base=cairBase(),cnt=k=>base.filter(r=>katOf(r)===k).length;
-  const nB=cnt('baru'),nA=cnt('akad'),nL=cnt('lunas'),nM=cnt('manual');
-  const kat=(document.getElementById('fcKat')||{}).value||'';
+  const base=cairBase(),cnt=k=>base.filter(r=>ketOf(r)===k).length;
   const tot=rows.reduce((s,r)=>s+r.nominal,0);
   const perJ={};rows.forEach(r=>{const o=perJ[r.jenis]=perJ[r.jenis]||{n:0,t:0};o.n++;o.t+=r.nominal});
-  const per={};base.forEach(r=>{const o=per[r.petugas]=per[r.petugas]||{b:0,a:0,m:0,l:0,p:0};
-    if(r.kat==='lunas')o.l++;else{o.p+=r.nominal;if(r.kat==='baru')o.b++;else if(r.kat==='akad')o.a++;else o.m++}});
-  const aoK=Object.keys(per).sort((x,y)=>(per[y].b+per[y].a+per[y].m)-(per[x].b+per[x].a+per[x].m));
+  const per={};base.forEach(r=>{const o=per[r.petugas]=per[r.petugas]||{b:0,a:0,x:0,p:0};o.p+=r.nominal;const k=ketOf(r);if(k==='baru')o.b++;else if(k==='akad')o.a++;else o.x++});
+  const aoK=Object.keys(per).sort((x,y)=>(per[y].b+per[y].a+per[y].x)-(per[x].b+per[x].a+per[x].x));
+  const nX=base.length-cnt('baru')-cnt('akad');
   const cards=`<div class="cair-cards">
-    <div class="cc"><small>\uD83C\uDD95 Baru murni</small><b>${nB}</b></div>
-    <div class="cc"><small>\uD83D\uDD04 Akad ulang</small><b>${nA}</b></div>
-    <div class="cc"><small>\uD83D\uDCCB Total pencairan</small><b>${nB+nA+nM}</b></div>
-    <div class="cc"><small>\uD83D\uDFE2 Lunas murni</small><b>${nL}</b></div></div>`;
-  const rekap=aoK.length?`<h4 style="margin:6px 0">Rekap per AO</h4><div class="tbl-w" style="overflow-x:auto"><table><tr><th>AO</th><th class="r">Baru murni</th><th class="r">Akad ulang</th><th class="r">Manual</th><th class="r">Total</th><th class="r">Nominal</th><th class="r">Lunas murni</th></tr>
-    ${aoK.map(a=>{const o=per[a];return `<tr><td><b>${esc(a)}</b></td><td class="num">${o.b}</td><td class="num">${o.a}</td><td class="num">${o.m}</td><td class="num"><b>${o.b+o.a+o.m}</b></td><td class="num">${rp(o.p)}</td><td class="num">${o.l}</td></tr>`}).join('')}</table></div>`:'';
-  box.innerHTML=cards+rekap+(rows.length?`<p style="margin:12px 0 6px"><b>${rows.length}</b> ${kat==='lunas'?'rekening lunas \u00B7 total OS terakhir':'pencairan \u00B7 total'} <b>${rp(tot)}</b>
+    <div class="cc"><small>\uD83C\uDD95 Pinjaman baru</small><b>${cnt('baru')}</b></div>
+    <div class="cc"><small>\uD83D\uDD04 Akad ulang</small><b>${cnt('akad')}</b></div>
+    <div class="cc"><small>\uD83D\uDCCB Total pencairan</small><b>${base.length}</b></div></div>`;
+  const rekap=aoK.length?`<h4 style="margin:6px 0">Rekap per AO</h4><div class="tbl-w" style="overflow-x:auto"><table><tr><th>AO</th><th class="r">Pinjaman baru</th><th class="r">Akad ulang</th>${nX?'<th class="r">Tanpa ket.</th>':''}<th class="r">Total</th><th class="r">Nominal</th></tr>
+    ${aoK.map(a=>{const o=per[a];return `<tr><td><b>${esc(a)}</b></td><td class="num">${o.b}</td><td class="num">${o.a}</td>${nX?`<td class="num">${o.x}</td>`:''}<td class="num"><b>${o.b+o.a+o.x}</b></td><td class="num">${rp(o.p)}</td></tr>`}).join('')}</table></div>`:'';
+  box.innerHTML=cards+rekap+(rows.length?`<p style="margin:12px 0 6px"><b>${rows.length}</b> pencairan \u00B7 total <b>${rp(tot)}</b>
     ${Object.keys(perJ).map(k=>`<span class="badge b1" style="margin-left:6px">${esc(k)}: ${perJ[k].n} \u00B7 ${rp(perJ[k].t)}</span>`).join('')}</p>
-    <div class="tbl-w" style="overflow-x:auto"><table><tr><th>Tanggal</th><th>AO</th><th>Kategori</th><th>No. Rekening</th><th>Nama Lengkap</th><th class="r">${kat==='lunas'?'OS terakhir':'Nominal'}</th><th>Jangka</th><th>Jenis</th><th>Keterangan</th><th></th></tr>
-    ${rows.map(r=>`<tr><td>${esc(fmtTgl(r.tanggalISO))}</td><td>${esc(r.petugas)}</td><td>${KAT_LBL[katOf(r)]}</td><td>${esc(r.rekening)}</td><td>${esc(r.nama)}</td>
-      <td class="num">${rp(r.nominal)}</td><td>${r.jangka?r.jangka+' '+esc(r.satuan):'-'}</td><td>${esc(r.jenis)}</td><td class="wrapok">${esc(cairKet(r))}</td>
+    <div class="tbl-w" style="overflow-x:auto"><table><tr><th>Tanggal</th><th>AO</th><th>Keterangan</th><th>No. Rekening</th><th>Nama Lengkap</th><th class="r">Nominal</th><th>Jangka</th><th>Jenis</th><th></th></tr>
+    ${rows.map(r=>`<tr><td>${esc(fmtTgl(r.tanggalISO))}</td><td>${esc(r.petugas)}</td><td>${KET_LBL[ketOf(r)]||'-'}</td><td>${esc(r.rekening)}</td><td>${esc(r.nama)}</td>
+      <td class="num">${rp(r.nominal)}</td><td>${r.jangka} ${esc(r.satuan)}</td><td>${esc(r.jenis)}</td>
       <td>${(SES.role==='admin'||r.user===SES.user)?`<button class="btn-d" data-id="${esc(r.id)}" onclick="delCair(this.dataset.id)">\u2715</button>`:''}</td></tr>`).join('')}</table></div>`
-    :'<p class="mut" style="margin-top:10px">Belum ada data pada filter ini.</p>');
+    :'<p class="mut" style="margin-top:10px">Belum ada pencairan pada filter ini.</p>');
+}
+/* ===== Daftar nasabah lunas: rekening pembiayaan dengan outstanding 0 (simpanan 111 tidak ikut) ===== */
+function lunasRows(){return myData().filter(d=>String(d.kode||'')!=='111'&&(d.outstanding||0)<=0)}
+function lunasFiltered(){
+  const q=((document.getElementById('lnQ')||{}).value||'').toLowerCase(),ao=(document.getElementById('lnAO')||{}).value||'',so=(document.getElementById('lnSort')||{}).value||'ao';
+  const r=lunasRows().filter(d=>(!q||d.nama.toLowerCase().includes(q)||d.rekening.includes(q))&&(!ao||d.ao===ao));
+  const byNama=(a,b)=>a.nama.localeCompare(b.nama);
+  r.sort(so==='nama'?byNama:so==='plaf'?(a,b)=>(b.plafond||0)-(a.plafond||0):so==='jt'?(a,b)=>jtKey(a)-jtKey(b):(a,b)=>a.ao.localeCompare(b.ao)||byNama(a,b));
+  return r;
+}
+function renderLunas(){
+  const box=document.getElementById('lunasList');if(!box)return;
+  const r=lunasFiltered();
+  const per={};r.forEach(d=>{per[d.ao]=(per[d.ao]||0)+1});
+  box.innerHTML=r.length?`<p style="margin:6px 0"><b>${r.length}</b> nasabah lunas \u00B7 total plafond <b>${rp(r.reduce((s,d)=>s+(d.plafond||0),0))}</b>
+    ${Object.keys(per).sort().map(a=>`<span class="badge b1" style="margin:2px 0 2px 6px">${esc(a)}: ${per[a]}</span>`).join('')}</p>
+    <div class="tbl-w" style="overflow-x:auto"><table><tr><th>No</th><th>No. Rekening</th><th>Nama</th><th>Produk</th><th>AO</th><th class="r">Plafond</th><th>Tgl JT</th></tr>
+    ${r.map((d,i)=>`<tr><td>${i+1}</td><td>${esc(d.rekening)}</td><td>${esc(d.nama)}</td><td>${esc(d.kode)} \u2014 ${esc(d.produk)}</td><td>${esc(d.ao)}</td><td class="num">${rp(d.plafond)}</td><td>${esc(d.tgl_jt)}</td></tr>`).join('')}</table></div>`
+    :'<p class="mut">Belum ada rekening dengan outstanding 0 pada filter ini.</p>';
+}
+function lunasCSV(){
+  const r=lunasFiltered();const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  let csv='\ufeffNo;No. Rekening;Nama;Produk;AO;Plafond;Tgl JT\n';
+  r.forEach((d,i)=>csv+=[i+1,q("'"+d.rekening),q(d.nama),q(d.kode+' - '+d.produk),q(d.ao),d.plafond||0,q(d.tgl_jt)].join(';')+'\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='nasabah-lunas-'+todayISO()+'.csv';
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
 }
 function delCair(id){
   const r=PENC.find(x=>x.id===id);if(!r||!confirm('Hapus pencairan '+r.nama+' ('+rp(r.nominal)+')?'))return;
@@ -1235,8 +1208,8 @@ function delCair(id){
 }
 function cairCSV(){
   const rows=cairFiltered();const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-  let csv='\ufeffTanggal;AO;Kategori;No. Rekening;Nama Lengkap;Nominal;Jangka Waktu;Jenis Pembiayaan;Keterangan\n';
-  rows.forEach(r=>csv+=[q(fmtTgl(r.tanggalISO)),q(r.petugas),q(KAT_LBL[katOf(r)].replace(/^\S+\s/,'')),q("'"+r.rekening),q(r.nama),r.nominal,q(r.jangka?r.jangka+' '+r.satuan:'-'),q(r.jenis),q(cairKet(r))].join(';')+'\n');
+  let csv='\ufeffTanggal;AO;Keterangan;No. Rekening;Nama Lengkap;Nominal;Jangka Waktu;Jenis Pembiayaan\n';
+  rows.forEach(r=>csv+=[q(fmtTgl(r.tanggalISO)),q(r.petugas),q((KET_LBL[ketOf(r)]||'').replace(/^\S+\s/,'')),q("'"+r.rekening),q(r.nama),r.nominal,q(r.jangka+' '+r.satuan),q(r.jenis)].join(';')+'\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='pencairan-'+todayISO()+'.csv';
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
 }
@@ -1245,8 +1218,8 @@ function cairCetak(){
   const tot=rows.reduce((s,r)=>s+r.nominal,0);
   w.document.write(`<html><head><title>Laporan Pencairan</title><style>body{font:12px Arial;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #444;padding:4px 6px}th{background:#eee}.r{text-align:right}</style></head><body>
   <h3>Laporan Pencairan Pembiayaan</h3><p>Dicetak: ${esc(new Date().toLocaleString('id-ID'))} \u00B7 ${esc(SES.nama)}</p>
-  <table><tr><th>No</th><th>Tanggal</th><th>AO</th><th>Kategori</th><th>No. Rekening</th><th>Nama Lengkap</th><th>Nominal</th><th>Jangka</th><th>Jenis</th></tr>
-  ${rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(fmtTgl(r.tanggalISO))}</td><td>${esc(r.petugas)}</td><td>${esc(KAT_LBL[katOf(r)].replace(/^\S+\s/,''))}</td><td>${esc(r.rekening)}</td><td>${esc(r.nama)}</td><td class="r">${rp(r.nominal)}</td><td>${r.jangka?r.jangka+' '+esc(r.satuan):'-'}</td><td>${esc(r.jenis)}</td></tr>`).join('')}
+  <table><tr><th>No</th><th>Tanggal</th><th>AO</th><th>Keterangan</th><th>No. Rekening</th><th>Nama Lengkap</th><th>Nominal</th><th>Jangka</th><th>Jenis</th></tr>
+  ${rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(fmtTgl(r.tanggalISO))}</td><td>${esc(r.petugas)}</td><td>${esc((KET_LBL[ketOf(r)]||'-').replace(/^\S+\s/,''))}</td><td>${esc(r.rekening)}</td><td>${esc(r.nama)}</td><td class="r">${rp(r.nominal)}</td><td>${r.jangka} ${esc(r.satuan)}</td><td>${esc(r.jenis)}</td></tr>`).join('')}
   <tr><th colspan="6" class="r">Total (${rows.length})</th><th class="r">${rp(tot)}</th><th colspan="2"></th></tr></table>
   <script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();
 }
@@ -1258,43 +1231,6 @@ const arsipPut=o=>arsipTx('readwrite',s=>s.put(o));
 const arsipGet=k=>arsipTx('readonly',s=>s.get(k));
 const arsipAll=()=>arsipTx('readonly',s=>s.getAll());
 const arsipDel=k=>arsipTx('readwrite',s=>s.delete(k));
-/* Cari arsip cabang ini dengan tanggal data < tgl (paling dekat) */
-async function arsipCariSebelum(cab,tgl){
-  try{const all=await arsipAll();
-    return all.filter(a=>a.cab===cab&&a.tgl&&a.tgl<tgl).sort((a,b)=>b.tgl.localeCompare(a.tgl))[0]||null}catch(e){return null}
-}
-async function arsipAdaCabang(cab){try{return (await arsipAll()).some(a=>a.cab===cab)}catch(e){return false}}
-/* Jalankan ulang deteksi dari 2 arsip cabang (pilih tanggal data baru; pembanding = arsip sebelumnya) */
-async function deteksiUlangOtomatis(){
-  try{
-    const all=await arsipAll();
-    const cab=(SES.cabang&&SES.cabang!=='all')?SES.cabang:null;
-    const rel=cab?all.filter(a=>a.cab===cab):all;
-    if(!rel.length){notify('Belum ada arsip di perangkat ini',false);return}
-    const cabs=[...new Set(rel.map(a=>a.cab))];
-    let pilihCab=cab;
-    if(!pilihCab){pilihCab=prompt('Pilih cabang:\n'+cabs.join('\n'),cabs[0]);if(!pilihCab||!cabs.includes(pilihCab))return}
-    const tgls=[...new Set(rel.filter(a=>a.cab===pilihCab).map(a=>a.tgl))].sort().reverse();
-    if(tgls.length<2){notify('Cabang '+pilihCab+' baru punya '+tgls.length+' arsip, butuh minimal 2',false);return}
-    const tBaru=prompt('Tanggal data BARU (tersedia: '+tgls.join(', ')+'):',tgls[0]);
-    if(!tBaru)return;
-    const iBaru=tgls.indexOf(tBaru);
-    if(iBaru<0){notify('Tanggal '+tBaru+' tidak ada di arsip',false);return}
-    const tLama=tgls[iBaru+1];
-    if(!tLama){notify('Tidak ada arsip lebih lama dari '+tBaru,false);return}
-    const aBaru=rel.find(a=>a.cab===pilihCab&&a.tgl===tBaru),aLama=rel.find(a=>a.cab===pilihCab&&a.tgl===tLama);
-    if(!aBaru||!aLama){notify('Arsip tidak lengkap',false);return}
-    if(!confirm('Deteksi ulang cabang '+pilihCab+':\nLama: '+tLama+' ('+aLama.rows.length+' rek)\nBaru: '+tBaru+' ('+aBaru.rows.length+' rek)\n\nDaftar otomatis cabang ini diganti hasil baru (input manual tidak disentuh). Lanjut?'))return;
-    PENC.forEach(r=>{if(r.kat&&r.cabang===pilihCab&&!r.dihapus){r.dihapus=true;r._reset=true;r.upd=Date.now()}});
-    const res=klasifikasiMutasi(aLama.rows,aBaru.rows);
-    const n=simpanMutasi(res,tBaru);
-    jsave(KCAIR,PENC);syncPush('pencairan',true);
-    const ob=new Set(aLama.rows.map(d=>d.rekening)),nb=new Set(aBaru.rows.map(d=>d.rekening));
-    notify('Deteksi ulang '+tLama+' \u2192 '+tBaru+': '+n.baru+' baru \u00B7 '+n.akad+' akad ulang \u00B7 '+n.lunas+' lunas (rek. baru '+[...nb].filter(x=>!ob.has(x)).length+', hilang '+[...ob].filter(x=>!nb.has(x)).length+')',true);
-    pgCair();
-  }catch(e){notify('Gagal: '+e.message,false)}
-}
-
 async function pgArs(){
   document.getElementById('content').innerHTML='<div class="panel"><h3>\uD83D\uDDC4\uFE0F Arsip Upload</h3><p class="mut">Memuat\u2026</p></div>';
   let list=[];let err='';
