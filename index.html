@@ -2285,6 +2285,7 @@ function renderJt(){
   const box=document.getElementById('jtList');if(!box)return;
   const r=jtRows(),g=jtGroups(r.rows);
   const per=document.getElementById('jtPer');if(per)per.textContent=jtPeriode(r);
+  jtRenderLunas();
   if(!r.rows.length){box.innerHTML='<div class="jt-empty">\uD83C\uDF3F<br>Tidak ada pinjaman pada periode ini.</div>';return}
   const tp=g.reduce((s,x)=>s+x.plafond,0),to=g.reduce((s,x)=>s+x.os,0);
   box.innerHTML=
@@ -2316,9 +2317,12 @@ function pgJt(){
       <select id="jtMode" onchange="renderJt()"><option value="bulan">Bulan terpilih</option><option value="lewat">Sudah lewat</option></select>
       ${adm&&cabs.length>1?`<select id="jtCab" onchange="renderJt()"><option value="">Semua cabang</option>${cabs.map(c=>`<option value="${esc(c)}">${esc(cbName(c))}</option>`).join('')}</select>`:''}
       ${adm?`<select id="jtAO" onchange="renderJt()"><option value="">Semua AO</option>${aos.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select>`:''}
+      ${adm?`<button class="btn-a" id="jtAiBtn" onclick="jtAnalisaAI()">\uD83E\uDD16 Analisa AI</button>`:''}
       <button class="btn-s" onclick="jtCSV()">\u2B07\uFE0F CSV</button>
       <button class="btn-s" onclick="jtCetak()">\uD83D\uDDA8\uFE0F Cetak</button>
     </div>
+    <div id="jtLun"></div>
+    <div id="jtAiOut"></div>
     <div id="jtList"></div>
   </div>`;
   renderJt();
@@ -2337,7 +2341,147 @@ function jtCSV(){
 function jtCetak(){
   const r=jtRows(),g=jtGroups(r.rows),now=new Date();
   printInit('Daftar Pinjaman Jatuh Tempo','Cabang: '+jtCabLabel()+' \u00B7 Periode: '+jtPeriode(r)+' \u00B7 Dicetak: '+now.toLocaleDateString('id-ID')+' '+now.toLocaleTimeString('id-ID'));
-  document.getElementById('printArea').innerHTML+=jtTableHtml(g);
+  document.getElementById('printArea').innerHTML+=jtAiPrintHtml()+jtTableHtml(g)+jtLunPrintHtml(window._jtLun);
+  window.print();
+}
+
+/* ===== PELUNASAN BULAN TERPILIH: dibanding data awal bulan (tanggal 1) + Analisa AI ===== */
+let JT_LUN_SEQ=0;
+function jtInScope(d){
+  if(!SES)return true;
+  if(SES.role==='admin')return inCabang(d);
+  return inCabang(d)&&(AOMAP[d.ao]===SES.user||String(d.ao||'').toUpperCase()===String(SES.nama||'').toUpperCase());
+}
+async function jtHitungLunas(){
+  let bln=jtVal('jtBln');if(!/^\d{4}-\d{2}$/.test(bln))bln=todayISO().slice(0,7);
+  const cabF=jtVal('jtCab'),aoF=jtVal('jtAO'),first=bln+'-01',isCur=bln===todayISO().slice(0,7);
+  const cabs=[...new Set(DATA.map(cabOf).concat(RIWAYAT.map(r=>r.cabang)))].filter(c=>c&&(!cabF||c===cabF)&&(myCabang()==='all'||c===myCabang()));
+  const keep=d=>!JT_ABAIKAN.includes(d.kode)&&jtInScope(d)&&(!aoF||d.ao===aoF);
+  const R={bln,lunas:[],oldAll:[],newAll:[],baru:[],tglAwal:[],tglAkhir:[],tanpa:[]};
+  for(const cb of cabs){
+    const L=RIWAYAT.filter(r=>r.cabang===cb).sort((a,b)=>a.tgl<b.tgl?-1:1);
+    const le=L.filter(r=>r.tgl<=first);
+    const base=le.length?le[le.length-1]:(L.find(r=>r.tgl.slice(0,7)===bln)||null);
+    if(!base){R.tanpa.push(cb);continue}
+    const a=await arsipGet(cb+'|'+base.tgl).catch(()=>null);
+    if(!a||!a.rows){R.tanpa.push(cb);continue}
+    let newRows,tglAk;
+    if(isCur){newRows=DATA.filter(d=>cabOf(d)===cb);tglAk=L.length?L[L.length-1].tgl:todayISO()}
+    else{
+      const inM=L.filter(r=>r.tgl.slice(0,7)===bln&&r.tgl>base.tgl);
+      if(!inM.length){R.tanpa.push(cb);continue}
+      const e=inM[inM.length-1],b=await arsipGet(cb+'|'+e.tgl).catch(()=>null);
+      if(!b||!b.rows){R.tanpa.push(cb);continue}
+      newRows=b.rows;tglAk=e.tgl;
+    }
+    if(tglAk<=base.tgl){R.tanpa.push(cb);continue}
+    const o=a.rows.filter(keep),n=newRows.filter(keep),nm=new Map(n.map(d=>[d.rekening,d])),os=new Set(o.map(d=>d.rekening));
+    o.forEach(d=>{if((d.outstanding||0)>0){const x=nm.get(d.rekening);
+      if(!x||(x.outstanding||0)<=0)R.lunas.push({rek:d.rekening,nama:d.nama,ao:d.ao,kode:d.kode,produk:d.produk,coll:collOf(d),os:d.outstanding||0,plafond:d.plafond||0,tgl_jt:d.tgl_jt,hilang:!x})}});
+    R.baru=R.baru.concat(n.filter(d=>!os.has(d.rekening)&&(d.outstanding||0)>0));
+    R.oldAll=R.oldAll.concat(o);R.newAll=R.newAll.concat(n);R.tglAwal.push(base.tgl);R.tglAkhir.push(tglAk);
+  }
+  R.tglAwal=[...new Set(R.tglAwal)].sort();R.tglAkhir=[...new Set(R.tglAkhir)].sort();
+  R.osLunas=R.lunas.reduce((s,x)=>s+x.os,0);
+  return R;
+}
+function jtLunProduk(R){
+  const m={};R.lunas.forEach(x=>{const k=x.kode+' \u00B7 '+x.produk;const g=m[k]=m[k]||{k,n:0,os:0};g.n++;g.os+=x.os});
+  return Object.values(m).sort((a,b)=>b.os-a.os);
+}
+function jtLunHtml(R){
+  if(!R.oldAll.length)return '<div class="jt-v" style="margin-bottom:14px"><h4>Pelunasan bulan ini</h4><p class="mut">Belum ada data pembanding awal bulan di perangkat ini'+(R.tanpa.length?' (cabang '+esc(R.tanpa.join(', '))+')':'')+'. Upload data awal bulan lewat menu Upload agar pelunasan bisa dihitung.</p></div>';
+  const osA=R.oldAll.reduce((s,d)=>s+(d.outstanding||0),0),osK=R.newAll.reduce((s,d)=>s+(d.outstanding||0),0),pr=jtLunProduk(R);
+  let h='<div class="jt-kpi">'
+   +'<div class="jt-k"><small>Pelunasan</small><b>'+R.lunas.length+' rek.</b></div>'
+   +'<div class="jt-k" title="'+esc(rp(R.osLunas))+'"><small>Nilai dilunasi</small><b>'+esc(rpS(R.osLunas))+'</b></div>'
+   +'<div class="jt-k" title="'+esc(rp(osA)+' \u2192 '+rp(osK))+'"><small>OS awal \u2192 kini</small><b>'+esc(rpS(osK-osA))+'</b></div></div>'
+   +'<p class="mut" style="margin:-6px 0 10px">Pembanding: data awal bulan '+R.tglAwal.map(fmtTgl).join(' / ')+' \u00B7 data akhir '+R.tglAkhir.map(fmtTgl).join(' / ')+'. Pelunasan = pinjaman yang OS-nya &gt; 0 di awal bulan dan kini nol / sudah keluar dari data.'+(R.tanpa.length?' Cabang tanpa pembanding: '+esc(R.tanpa.join(', '))+'.':'')+'</p>';
+  if(R.lunas.length){
+    h+='<details style="margin-bottom:14px"><summary><b>Rincian pelunasan</b> ('+R.lunas.length+')</summary><div style="overflow-x:auto"><table class="jt-tbl">'
+     +pr.map(p=>'<tr class="jt-g"><td colspan="2">'+esc(p.k)+' <span class="mut">('+p.n+')</span></td><td class="num">'+nf(p.os)+'</td></tr>').join('')
+     +'</table><table class="jt-tbl">'
+     +R.lunas.slice().sort((a,b)=>b.os-a.os).slice(0,200).map(x=>'<tr><td class="jt-nm"><b>'+esc(x.nama)+'</b><small>'+esc(x.rek)+(SES.role==='admin'?' \u00B7 '+esc(x.ao):'')+' \u00B7 '+esc(x.kode)+'</small></td><td class="jt-tg">'+esc(x.tgl_jt||'-')+'</td><td class="num"><b>'+nf(x.os)+'</b></td></tr>').join('')
+     +'</table></div></details>';
+  }
+  return h;
+}
+function jtLunPrintHtml(R){
+  if(!R||!R.oldAll.length)return '';
+  const pr=jtLunProduk(R);
+  return '<h2>Pelunasan Bulan Terpilih</h2><p>'+R.lunas.length+' rekening \u00B7 nilai dilunasi '+esc(rp(R.osLunas))+' \u00B7 pembanding awal bulan '+esc(R.tglAwal.map(fmtTgl).join(' / '))+'</p>'
+   +'<table><tr><th>Produk</th><th class="r">Rek.</th><th class="r">Nilai (OS awal)</th></tr>'+pr.map(p=>'<tr><td>'+esc(p.k)+'</td><td class="num">'+p.n+'</td><td class="num">'+nf(p.os)+'</td></tr>').join('')+'</table>'
+   +'<table><tr><th>No</th><th>Nomor Pinjaman</th><th>Nama</th><th>AO</th><th class="r">OS awal bulan</th></tr>'
+   +R.lunas.slice().sort((a,b)=>b.os-a.os).map((x,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(x.rek)+'</td><td>'+esc(x.nama)+'</td><td>'+esc(x.ao)+'</td><td class="num">'+nf(x.os)+'</td></tr>').join('')+'</table>';
+}
+async function jtRenderLunas(){
+  const box=document.getElementById('jtLun');if(!box)return;
+  const seq=++JT_LUN_SEQ;
+  box.innerHTML='<p class="mut" style="margin:0 0 12px">\u23F3 Menghitung pelunasan\u2026</p>';
+  let R;try{R=await jtHitungLunas()}catch(e){if(seq===JT_LUN_SEQ)box.innerHTML='';return}
+  if(seq!==JT_LUN_SEQ)return;
+  window._jtLun=R;box.innerHTML=jtLunHtml(R);
+}
+function jtAiRingkas(R){
+  const r=jtRows(),rows=r.rows,sum=(a,f)=>a.reduce((s,x)=>s+f(x),0),tung=d=>Math.max(0,d.tak_pokok||0);
+  const grp=(arr,kf)=>{const m={};arr.forEach(x=>{const k=kf(x);(m[k]=m[k]||[]).push(x)});return m};
+  const ym=parseInt(r.bln.slice(0,4),10)*12+parseInt(r.bln.slice(5,7),10)-1;
+  const belum=rows.filter(d=>(d.outstanding||0)>0);
+  const jt={pinjaman:rows.length,os:sum(rows,d=>d.outstanding),plafond:sum(rows,d=>d.plafond),sudah_nol_os:rows.length-belum.length,masih_ada_os:belum.length,
+    os_masih_ada:sum(belum,d=>d.outstanding),tunggakan_pokok:sum(rows,tung),sudah_angsur:rows.filter(d=>d.sudah_angsur).length,
+    per_produk:Object.entries(grp(rows,d=>d.kode+' '+d.produk)).map(([k,g])=>({produk:k,pinjaman:g.length,os:sum(g,d=>d.outstanding),plafond:sum(g,d=>d.plafond)})),
+    per_coll:[1,2,3,4,5].map(c=>{const g=belum.filter(d=>collOf(d)===c);return{coll:c+' '+collLabel(c),pinjaman:g.length,os:sum(g,d=>d.outstanding)}}),
+    per_ao:Object.entries(grp(rows,d=>d.ao)).map(([k,g])=>({ao:k,pinjaman:g.length,os:sum(g,d=>d.outstanding),masih_ada_os:g.filter(d=>(d.outstanding||0)>0).length,os_coll3_5:sum(g.filter(d=>collOf(d)>=3),d=>d.outstanding)})).sort((a,b)=>b.os-a.os).slice(0,30)};
+  if(r.mode==='bulan')jt.per_minggu=[1,2,3,4,5].map(w=>{const g=rows.filter(d=>{const t=jtParse(d.tgl_jt);return t&&Math.min(5,Math.ceil(t.d/7))===w});return{minggu_ke:w,pinjaman:g.length,os:sum(g,d=>d.outstanding)}});
+  let pel=null,banding=null;
+  if(R&&R.oldAll.length){
+    const kls=x=>{const t=jtParse(x.tgl_jt);if(!t)return 'tidak_diketahui';const k=t.y*12+t.m-1;return k===ym?'jatuh_tempo_bulan_ini':k>ym?'dilunasi_sebelum_jatuh_tempo':'dilunasi_setelah_lewat_jatuh_tempo'};
+    pel={rekening:R.lunas.length,nilai_os_saat_awal_bulan:R.osLunas,
+      menurut_jatuh_tempo:Object.entries(grp(R.lunas,kls)).map(([k,g])=>({kategori:k,rekening:g.length,os:sum(g,x=>x.os)})),
+      per_produk:jtLunProduk(R).map(p=>({produk:p.k,rekening:p.n,os:p.os})),
+      per_coll_sebelumnya:[1,2,3,4,5].map(c=>{const g=R.lunas.filter(x=>x.coll===c);return{coll:c+' '+collLabel(c),rekening:g.length,os:sum(g,x=>x.os)}}),
+      per_ao:Object.entries(grp(R.lunas,x=>x.ao)).map(([k,g])=>({ao:k,rekening:g.length,os:sum(g,x=>x.os)})).sort((a,b)=>b.os-a.os).slice(0,30),
+      hilang_dari_data:R.lunas.filter(x=>x.hilang).length,os_nol_di_data:R.lunas.filter(x=>!x.hilang).length};
+    const sA=statRows(R.oldAll),sK=statRows(R.newAll),np=s=>s.c[3].os+s.c[4].os+s.c[5].os;
+    banding={data_awal_bulan:R.tglAwal,data_akhir:R.tglAkhir,os_awal:sA.os,os_kini:sK.os,rekening_awal:sA.n,rekening_kini:sK.n,
+      tunggakan_pokok_awal:sA.tg,tunggakan_pokok_kini:sK.tg,sudah_angsur_awal:sA.sd,sudah_angsur_kini:sK.sd,os_coll3_5_awal:np(sA),os_coll3_5_kini:np(sK),
+      rekening_baru_sejak_awal_bulan:R.baru.length,os_rekening_baru:sum(R.baru,d=>d.outstanding)};
+  }
+  return {_instruksi:'Kamu analis kredit/pembiayaan. Buat LAPORAN berbahasa Indonesia untuk pimpinan dari angka ini. Kamu bebas memilih pembanding dan sudut analisa (antar produk, AO, kolektibilitas, minggu, awal bulan vs kini, pelunasan vs jatuh tempo, dll). Sertakan: ringkasan utama, pelunasan bulan ini, jatuh tempo (yang belum lunas dan risikonya), perbandingan dengan awal bulan, temuan menarik/anomali, dan rekomendasi tindakan konkret. Gunakan hanya angka yang diberikan, jangan mengarang; sebut bila data pembanding tidak ada. Catatan: rekening yang hilang dari data bisa lunas atau dihapus buku, jangan dipastikan.',
+    bulan:r.bln,mode:r.mode==='lewat'?'sudah lewat jatuh tempo':'jatuh tempo bulan terpilih',lingkup:(jtVal('jtAO')?'AO '+jtVal('jtAO'):'Semua AO yang terlihat')+' \u00B7 '+jtCabLabel(),
+    jatuh_tempo:jt,pelunasan:pel,perbandingan_awal_bulan:banding,catatan_data:(R&&R.tanpa.length)?'Cabang tanpa data awal bulan: '+R.tanpa.join(', '):undefined};
+}
+async function jtAnalisaAI(){
+  const out=document.getElementById('jtAiOut'),btn=document.getElementById('jtAiBtn');if(!out)return;
+  if(btn)btn.disabled=true;
+  try{
+    out.innerHTML='<p class="mut">\u23F3 Menyiapkan ringkasan angka\u2026</p>';
+    const R=await jtHitungLunas();window._jtLun=R;
+    const data=jtAiRingkas(R);
+    if(!data.jatuh_tempo.pinjaman&&!data.pelunasan){out.innerHTML='';notify('Tidak ada data untuk dianalisa pada pilihan ini',false);return}
+    out.innerHTML='<p class="mut">\u23F3 AI sedang menganalisa (bisa 10\u201330 detik)\u2026</p>';
+    const j=await apiCall('analisa_ai',{ringkas:data});
+    if(!j||!j.ok){out.innerHTML='';notify(pesanAI(j&&j.error),false);return}
+    window._jtAiTeks=j.teks;window._jtAiBln=R.bln;
+    out.innerHTML='<div class="panel" style="background:#fff;margin-top:8px"><h3 style="margin-bottom:6px">\uD83E\uDD16 Laporan Analisa AI \u2014 '+esc(jtPeriode({bln:R.bln,mode:jtVal('jtMode')||'bulan'}))+'</h3>'
+      +'<div style="white-space:pre-wrap;line-height:1.55">'+esc(j.teks)+'</div>'
+      +'<div class="toolbar" style="margin-top:8px"><button class="btn-a" onclick="jtSalinAI()">\uD83D\uDCCB Salin</button><button class="btn-a" onclick="jtCetakAI()">\uD83D\uDDA8\uFE0F Cetak / PDF</button></div>'
+      +'<p class="mut">Dibuat AI dari angka ringkasan (tanpa nama nasabah); periksa sebelum bertindak.'+(j.sisa!=null?' Sisa analisa hari ini: '+j.sisa+'.':'')+'</p></div>';
+  }catch(e){out.innerHTML='';notify('Gagal: '+e.message,false)}
+  finally{if(btn)btn.disabled=false}
+}
+function jtSalinAI(){
+  const t=window._jtAiTeks||'';
+  if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>notify('Teks disalin'),()=>notify('Gagal menyalin',false));
+  else notify('Browser tidak mendukung salin otomatis',false);
+}
+function jtAiPrintHtml(){
+  return (window._jtAiTeks&&window._jtAiBln===(jtVal('jtBln')||todayISO().slice(0,7)))?'<h2>Analisa AI</h2><div style="white-space:pre-wrap;line-height:1.5;font-size:10pt">'+esc(window._jtAiTeks)+'</div>':'';
+}
+function jtCetakAI(){
+  const r=jtRows(),now=new Date();
+  printInit('Laporan Analisa AI \u2014 Jatuh Tempo & Pelunasan','Cabang: '+jtCabLabel()+' \u00B7 Periode: '+jtPeriode(r)+' \u00B7 Dicetak: '+now.toLocaleDateString('id-ID')+' '+now.toLocaleTimeString('id-ID'));
+  document.getElementById('printArea').innerHTML+=jtAiPrintHtml()+jtLunPrintHtml(window._jtLun);
   window.print();
 }
 
