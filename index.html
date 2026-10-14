@@ -314,6 +314,11 @@ nav a svg{flex:0 0 18px}
 .slk details{border-top:1px solid var(--bd);padding-top:6px;margin-top:6px}
 .slk details>summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--ac);padding:3px 0;list-style:none}
 .slk details>summary::-webkit-details-marker{display:none}
+
+/* tab Pengaturan Umum */
+.set-tabs{display:flex;gap:6px;overflow-x:auto;margin:0 0 14px;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.set-tabs button{flex:0 0 auto;background:#e8eeec;color:var(--tx);border-radius:20px;padding:9px 16px;font-size:13.5px;white-space:nowrap}
+.set-tabs button.on{background:var(--p);color:#fff}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0e6e5d">
@@ -414,7 +419,7 @@ let TOKEN=null;try{TOKEN=localStorage.getItem(K.tok)}catch(e){}
 /* bersihkan sisa password polos dari versi lama */
 users=users.map(u=>({nama:u.nama,user:u.user,role:u.role,cabang:u.cabang}));jsave(K.users,users);
 let pendingProd=null, pendingColl=null, pendingCab=null;  // filter yang dipilih dari klik di Beranda
-/* Master daftar cabang \u2014 admin kelola via menu Kelola Akun. Kode = 3 digit di nomor rekening (posisi 4-6). */
+/* Master daftar cabang \u2014 admin kelola via menu Pengaturan Umum \u203A Kelola Akun. Kode = 3 digit di nomor rekening (posisi 4-6). */
 const KCAB='kop_cabangs';
 let CABANGS=jload(KCAB,[{kode:'052',nama:'LIMPUNG'}]);
 function addCabang(){
@@ -551,15 +556,14 @@ const PAGES=[
   {id:'out',t:'\uD83D\uDCB0 Daftar Outstanding',fn:()=>pgOut(),bot:3,lbl:'Outstanding'},
   {id:'pinj',t:'\uD83D\uDCD1 Tagihan & Pembiayaan',fn:()=>pgPinj(),bot:2,lbl:'Tagihan'},
   {id:'jt',t:'\uD83D\uDCC5 Jatuh Tempo',fn:()=>pgJt(),keep:true,refresh:()=>{if(typeof renderJt==='function')renderJt()}},
+  {id:'rpt',t:'\uD83C\uDFAF Analisa Kinerja',fn:()=>pgRpt(),keep:true},
   {id:'cair',t:'\uD83D\uDCB5 Laporan Pencairan',fn:()=>pgCair(),keep:true,refresh:()=>{if(typeof renderCairList==='function')renderCairList()}},
+  {id:'kalk',t:'\uD83E\uDDEE Kalkulator Pembiayaan',fn:()=>pgKalk(),keep:true},
   {id:'up',t:'\u2B06\uFE0F Upload Data',fn:()=>pgUp(),admin:true,keep:true},
   {id:'rw',t:'\uD83D\uDCC8 Riwayat Mingguan',fn:()=>pgRw(),admin:true},
-  {id:'ars',t:'\uD83D\uDDC4\uFE0F Arsip Upload',fn:()=>pgArs(),admin:true},
   {id:'slik',t:'\uD83D\uDD0D Baca SLIK',fn:()=>pgSlik(),admin:true,keep:true},
-  {id:'rpt',t:'\uD83D\uDDA8\uFE0F Laporan',fn:()=>pgRpt(),keep:true},
   {id:'sync',t:'\uD83D\uDD04 Sinkronisasi',fn:()=>pgSync()},
-  {id:'ao',t:'\uD83D\uDC65 Pembagian Data AO',fn:()=>pgAO(),admin:true},
-  {id:'usr',t:'\u2699\uFE0F Kelola Akun',fn:()=>pgUsr(),admin:true}
+  {id:'set',t:'\u2699\uFE0F Pengaturan Umum',fn:()=>pgSet(),admin:true}
 ];
 const isAdmin=()=>!!(SES&&SES.role==='admin');
 const pageOf=id=>PAGES.find(p=>p.id===id);
@@ -582,10 +586,10 @@ const ICO={
  up:'M12 16V4 M7 9l5-5 5 5 M4 20h16',
  rw:'M3 17l6-6 4 4 8-8 M15 7h6v6',
  ars:'M3 5h18v4H3z M5 9v10h14V9 M10 13h4',
- rpt:'M7 9V3h10v6 M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2 M7 15h10v6H7z',
+ rpt:'M4 16a8 8 0 1 1 16 0 M12 16l4-5 M12 16v.01 M3 20h18 M6.3 9.3l1 1 M17.7 9.3l-1 1 M12 6v1.5',
  sync:'M20 11a8 8 0 0 0-14.9-3 M4 4v4h4 M4 13a8 8 0 0 0 14.9 3 M20 20v-4h-4',
  ao:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M22 21v-2a4 4 0 0 0-3-3.9 M16 3.1a4 4 0 0 1 0 7.8',
- usr:'M4 6h10 M18 6h2 M4 12h4 M12 12h8 M4 18h12 M20 18h0 M14 4v4 M8 10v4 M16 16v4',
+ set:'M4 6h10 M18 6h2 M4 12h4 M12 12h8 M4 18h12 M20 18h0 M14 4v4 M8 10v4 M16 16v4',
  more:'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z',
  logout:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
  key:'M2.6 17.4A2 2 0 0 0 2 18.8V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.2a2 2 0 0 0 1.4-.6l.8-.8a6.5 6.5 0 1 0-4-4z M16.5 7.5h.01',
@@ -597,10 +601,11 @@ const ICO={
  eye:'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
  eyeoff:'M3 3l18 18 M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 4 M6.6 6.6A17 17 0 0 0 2 12s4 7 10 7a9.7 9.7 0 0 0 4.1-.9 M9.9 9.9a3 3 0 0 0 4.2 4.2',
  slik:'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.3-4.3',
+ kalk:'M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z M8 6h8v4H8z M8 14h.01 M12 14h.01 M16 14h.01 M8 18h.01 M12 18h.01 M16 18h.01',
  dot:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'
 };
 function ico(id,sz){sz=sz||22;return '<svg viewBox="0 0 24 24" width="'+sz+'" height="'+sz+'" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+(ICO[id]||ICO.dot)+'"/></svg>'}
-const EMO_ICO={0x1F4DE:'phone',0x1F4CA:'chart',0x1F4B0:'out',0x1F4C8:'rw',0x1F4C9:'rw',0x2705:'check',0x1F4CB:'lap',0x1F3E2:'bld',0x1F3DB:'bld',0x1F4C5:'jt',0x1F4B5:'cair',0x1F5C4:'ars',0x1F5A8:'rpt',0x1F504:'sync',0x1F465:'ao',0x2B06:'up',0x1F4D1:'pinj',0x1F4B8:'cair',0x1F4C4:'pinj'};
+const EMO_ICO={0x1F4DE:'phone',0x1F4CA:'chart',0x1F4B0:'out',0x1F4C8:'rw',0x1F4C9:'rw',0x2705:'check',0x1F4CB:'lap',0x1F3E2:'bld',0x1F3DB:'bld',0x1F4C5:'jt',0x1F4B5:'cair',0x1F5C4:'ars',0x1F3AF:'rpt',0x2699:'set',0x1F5A8:'rpt',0x1F504:'sync',0x1F465:'ao',0x2B06:'up',0x1F4D1:'pinj',0x1F4B8:'cair',0x1F4C4:'pinj'};
 function iconizeHeads(){
   const re=/^\s*((?:\p{Extended_Pictographic}\uFE0F?\u200D?)+)\s*/u;
   document.querySelectorAll('#content h3,#content h4').forEach(h=>{
@@ -649,6 +654,118 @@ function go(id){
 }
 function notify(t,ok=true){const n=document.getElementById('notif');n.className='notif '+(ok?'ok':'bad');n.textContent=t;setTimeout(()=>n.className='notif',3500)}
 
+/* ================= KALKULATOR PEMBIAYAAN ================= */
+/* Metode: bunga flat per tahun. Total bunga = plafon x bunga% x (tenor/12); angsuran tetap = (plafon + total bunga) / tenor.
+   Porsi bunga per bulan menurun linear (metode jumlah angka): bunga bulan ke-k = total bunga x 2 x (tenor-k+1) / (tenor x (tenor+1)).
+   Pola ini persis sama dengan contoh asli (5 juta, 24 bulan, 18%); selisih pembulatan masuk ke pokok angsuran terakhir. */
+const KP_CONTOH={plafon:5000000,tenor:24,bunga:18,data:[
+[139333,144000,4860667],[145333,138000,4715334],[151333,132000,4564001],[157333,126000,4406668],[163333,120000,4243335],[169333,114000,4074002],
+[175333,108000,3898669],[181333,102000,3717336],[187333,96000,3530003],[193333,90000,3336670],[199333,84000,3137337],[205333,78000,2932004],
+[211333,72000,2720671],[217333,66000,2503338],[223333,60000,2280005],[229333,54000,2050672],[235333,48000,1815339],[241333,42000,1574006],
+[247333,36000,1326673],[253333,30000,1073340],[259333,24000,814007],[265333,18000,548674],[271333,12000,277341],[277341,6000,0]]};
+const kpFmt=n=>Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+const kpRp=n=>'Rp '+kpFmt(n);
+const kpParse=s=>parseInt(String(s||'').replace(/\D/g,''),10)||0;
+const kpEl=id=>document.getElementById(id);
+function pgKalk(){
+  document.getElementById('content').innerHTML=`
+  <div class="panel"><h3>Simulasi Pembiayaan Koperasi</h3>
+    <div style="background:#e8f5ef;border-left:4px solid var(--p);padding:12px 14px;border-radius:8px;font-size:13px;line-height:1.6;margin-bottom:14px">
+      <b>Metode:</b> bunga flat per tahun<br>
+      <b>Total bunga</b> = Plafon \u00D7 Bunga% \u00D7 (Tenor/12)<br>
+      <b>Angsuran tetap</b> = (Plafon + Total bunga) / Tenor<br>
+      <span class="mut">Porsi bunga menurun tiap bulan, mengikuti pola contoh asli.</span>
+    </div>
+    <div id="kpErr" class="err"></div>
+    <div class="rowflex">
+      <div><label>Plafon Pinjaman (Rp)</label><input id="kpPlafon" inputmode="numeric" autocomplete="off"></div>
+      <div><label>Tenor (bulan)</label><input type="number" id="kpTenor" min="1" max="120" inputmode="numeric"></div>
+      <div><label>Bunga per Tahun (%)</label><input type="number" id="kpBunga" step="0.1" min="0" max="36" inputmode="decimal"></div>
+      <div><label>Angsuran Tetap / Bulan</label><input id="kpAngs" readonly style="background:#eef4f2;font-weight:700"></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+      <button type="button" class="btn-p" style="width:auto;margin-top:0" id="kpBtnHitung">\u25B6 Hitung</button>
+      <button type="button" class="btn-a" id="kpBtnContoh">Contoh Asli</button>
+      <button type="button" class="btn-s" id="kpBtnReset">Reset</button>
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card"><h4>Total Pinjaman</h4><div class="v" style="font-size:20px" id="kpSPinj">-</div></div>
+    <div class="card"><h4>Total Angsuran</h4><div class="v" style="font-size:20px" id="kpSAngs">-</div></div>
+    <div class="card"><h4>Total Bunga</h4><div class="v" style="font-size:20px;color:var(--red)" id="kpSBunga">-</div></div>
+    <div class="card"><h4>Angsuran / Bulan</h4><div class="v" style="font-size:20px;color:var(--p)" id="kpSBln">-</div></div>
+    <div class="card"><h4>Bunga Efektif / Bulan</h4><div class="v" style="font-size:20px" id="kpSEf">-</div></div>
+  </div>
+  <div class="panel"><h3>Jadwal Angsuran</h3>
+    <div class="tbl-w"><table><thead id="kpHead"></thead><tbody id="kpBody"></tbody></table></div>
+  </div>`;
+  const P=kpEl('kpPlafon'),T=kpEl('kpTenor'),B=kpEl('kpBunga');
+  const setDef=()=>{P.value='5.000.000';T.value='24';B.value='18';kpHitung()};
+  P.value='5.000.000';T.value='24';B.value='18';
+  P.addEventListener('input',()=>{const n=kpParse(P.value);P.value=n?kpFmt(n):''});
+  [P,T,B].forEach(el=>{
+    el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();kpHitung()}});
+    el.addEventListener('blur',()=>{const p=kpParse(P.value),t=parseInt(T.value,10),b=parseFloat(B.value);
+      if(p>=100000&&t>=1&&t<=120&&b>=0&&b<=36)kpHitung()});
+  });
+  kpEl('kpBtnHitung').onclick=kpHitung;
+  kpEl('kpBtnContoh').onclick=setDef;
+  kpEl('kpBtnReset').onclick=setDef;
+  kpHitung();
+}
+function kpHitung(){
+  const err=kpEl('kpErr'),body=kpEl('kpBody'),head=kpEl('kpHead');
+  if(!err||!body)return;
+  const plafon=kpParse(kpEl('kpPlafon').value),tenor=parseInt(kpEl('kpTenor').value,10),bg=parseFloat(kpEl('kpBunga').value);
+  let msg='';
+  if(!(plafon>=100000))msg='Plafon minimal Rp100.000';
+  else if(!(tenor>=1&&tenor<=120))msg='Tenor harus 1-120 bulan';
+  else if(!(bg>=0&&bg<=36))msg='Bunga harus 0-36%';
+  if(msg){
+    err.textContent='\u26A0\uFE0F '+msg;err.style.display='block';
+    head.innerHTML='';body.innerHTML='<tr><td style="padding:24px;color:var(--red)">'+msg+'</td></tr>';
+    return;
+  }
+  err.style.display='none';
+  kpEl('kpPlafon').value=kpFmt(plafon);
+  const totalBunga=plafon*(bg/100)*(tenor/12);
+  const angs=Math.round((plafon+totalBunga)/tenor);
+  const efektif=(2*totalBunga)/(plafon*(tenor+1));
+  kpEl('kpAngs').value=kpFmt(angs);
+  const bunga78=k=>Math.round(totalBunga*2*(tenor-k+1)/(tenor*(tenor+1)));
+  if(angs-bunga78(1)<=0){
+    msg='Dengan metode ini, tenor '+tenor+' bulan pada bunga '+bg+'% membuat pokok bulan awal negatif. Kurangi tenor atau bunga.';
+    err.textContent='\u26A0\uFE0F '+msg;err.style.display='block';
+    head.innerHTML='';body.innerHTML='<tr><td style="padding:24px;color:var(--red)">'+msg+'</td></tr>';
+    return;
+  }
+  const contoh=(plafon===KP_CONTOH.plafon&&tenor===KP_CONTOH.tenor&&bg===KP_CONTOH.bunga);
+  head.innerHTML='<tr><th>No</th><th>Jatuh Tempo</th><th>Pokok</th><th>Bunga</th><th>Angsuran</th><th>Sisa Pokok</th>'+(contoh?'<th>Status</th>':'')+'</tr>';
+  const now=new Date(),d0=now.getDate();
+  let sisaPokok=plafon,rows='',tP=0,tB=0,tA=0;
+  for(let bulan=1;bulan<=tenor;bulan++){
+    const bunga=bunga78(bulan);
+    const pokok=bulan===tenor?sisaPokok:angs-bunga;
+    const sisa=Math.max(0,sisaPokok-pokok);
+    const angsuran=pokok+bunga;
+    sisaPokok=sisa;tP+=pokok;tB+=bunga;tA+=angsuran;
+    const tg=new Date(now.getFullYear(),now.getMonth()+bulan,1);
+    tg.setDate(Math.min(d0,new Date(tg.getFullYear(),tg.getMonth()+1,0).getDate()));
+    const tglStr=String(tg.getDate()).padStart(2,'0')+'-'+String(tg.getMonth()+1).padStart(2,'0')+'-'+tg.getFullYear();
+    let stat='';
+    if(contoh){const r=KP_CONTOH.data[bulan-1];stat=(r&&r[0]===pokok&&r[1]===bunga&&r[2]===sisa)?'\u2705 Cocok':'\u26A0\uFE0F Beda'}
+    rows+='<tr'+(bulan===tenor?' style="background:#e6f2ef;font-weight:700"':'')+'><td>'+bulan+'</td><td>'+tglStr+'</td><td>'+kpRp(pokok)+'</td><td>'+kpRp(bunga)+'</td>'
+      +'<td style="font-weight:700;color:var(--p)">'+kpRp(angsuran)+'</td><td>'+kpRp(sisa)+'</td>'+(contoh?'<td>'+stat+'</td>':'')+'</tr>';
+  }
+  rows+='<tr style="background:var(--pd);color:#fff;font-weight:700"><td colspan="2">TOTAL</td><td>'+kpRp(tP)+'</td><td>'+kpRp(tB)+'</td><td>'+kpRp(tA)+'</td><td>Rp 0</td>'+(contoh?'<td></td>':'')+'</tr>';
+  body.innerHTML=rows;
+  kpEl('kpSPinj').textContent=kpRp(plafon);
+  kpEl('kpSAngs').textContent=kpRp(tA);
+  kpEl('kpSBunga').textContent=kpRp(tB);
+  kpEl('kpSBln').textContent=kpRp(angs);
+  kpEl('kpSEf').textContent=(efektif*100).toFixed(2)+'%';
+}
+
 /* ================= BERANDA ================= */
 function openProdFilter(p){pendingProd=p;pendingColl=null;pendingCab=null;go('out')}
 function openCabFilter(c){pendingCab=c;pendingProd=null;pendingColl=null;go('out')}
@@ -663,7 +780,7 @@ function pgHome(){
   const perProd={};MD.forEach(d=>{perProd[d.produk]=(perProd[d.produk]||0)+1});
   const perCab={};MD.forEach(d=>{const c=cabOf(d);(perCab[c]=perCab[c]||[]).push(d)});
   const warn=SES.role!=='admin'&&MD.length===0
-    ?`<div class="notif bad">\u26A0 Anda belum di-assign data AO. Hubungi admin untuk mengaitkan data AO dengan akun Anda (menu <b>Pembagian Data AO</b>).</div>`:'';
+    ?`<div class="notif bad">\u26A0 Anda belum di-assign data AO. Hubungi admin untuk mengaitkan data AO dengan akun Anda (menu <b>Pengaturan Umum \u203A Pembagian Data AO</b>).</div>`:'';
   document.getElementById('content').innerHTML=warn+homeGrid();
 }
 
@@ -1043,7 +1160,7 @@ function renderPinj(){
 function pgUp(){
   document.getElementById('content').innerHTML=`
   <div class="panel"><h3>Upload Data Tagihan (format .XLS XML Spreadsheet)</h3>
-    <p class="mut" style="margin-bottom:12px">Unggah file hasil ekspor sistem seperti contoh (format Excel XML 2003). Data aktif cabang tersebut akan <b>diganti</b> oleh data baru, tetapi versi sebelumnya tetap aman di <b>Arsip Upload</b>. Admin Pusat dapat mengupload file dari cabang mana pun (otomatis tertanda cabangnya); admin cabang hanya bisa upload file cabangnya sendiri. Status Sudah/Belum angsur dihitung otomatis persis seperti aplikasi lama (kolom "Tagihan Aktif Margin" atau "Tagihan Masuk Pokok" bernilai di atas nol). Setelah upload, data <b>otomatis terbagi per AO</b> berdasarkan kolom "Nama AO" \u2014 admin tinggal mengaitkan tiap AO ke akun petugas di menu <b>Pembagian Data AO</b>.</p>
+    <p class="mut" style="margin-bottom:12px">Unggah file hasil ekspor sistem seperti contoh (format Excel XML 2003). Data aktif cabang tersebut akan <b>diganti</b> oleh data baru, tetapi versi sebelumnya tetap aman di <b>Pengaturan Umum \u203A Arsip Upload</b>. Admin Pusat dapat mengupload file dari cabang mana pun (otomatis tertanda cabangnya); admin cabang hanya bisa upload file cabangnya sendiri. Status Sudah/Belum angsur dihitung otomatis persis seperti aplikasi lama (kolom "Tagihan Aktif Margin" atau "Tagihan Masuk Pokok" bernilai di atas nol). Setelah upload, data <b>otomatis terbagi per AO</b> berdasarkan kolom "Nama AO" \u2014 admin tinggal mengaitkan tiap AO ke akun petugas di menu <b>Pengaturan Umum \u203A Pembagian Data AO</b>.</p>
     <div class="toolbar" style="align-items:flex-end">
       <div><label>Tanggal data (sesuai isi file)</label><input type="date" id="upTgl" value="${todayISO()}" data-auto="${todayISO()}"></div>
     </div>
@@ -1052,7 +1169,7 @@ function pgUp(){
       <button class="btn-p" style="width:auto;margin:0" onclick="doUpload()">\uD83D\uDCE4 Proses Upload</button>
     </div>
     <label style="display:block;margin:6px 0"><input type="checkbox" id="upDl" checked> Unduh juga salinan file ke perangkat ini (arsip cadangan di luar aplikasi)</label>
-    <p class="mut" style="margin-bottom:8px">Setiap upload otomatis diarsipkan dengan penanda <b>cabang + tanggal data</b>. Upload dengan cabang dan tanggal yang sama akan <b>ditanyakan dulu</b> sebelum menimpa arsip lama. Lihat di menu <b>Arsip Upload</b>.</p>
+    <p class="mut" style="margin-bottom:8px">Setiap upload otomatis diarsipkan dengan penanda <b>cabang + tanggal data</b>. Upload dengan cabang dan tanggal yang sama akan <b>ditanyakan dulu</b> sebelum menimpa arsip lama. Lihat di menu <b>Pengaturan Umum \u203A Arsip Upload</b>.</p>
     <div id="upMsg"></div>
     <p class="mut" style="margin-top:14px">Kolom yang dibaca: No. Rekening, Nama, Plafond, Outstanding, Coll, Tunggakan Awal (Pokok/Margin/Bln), Tagihan Aktif (Pokok/Margin), Tagihan Masuk (Pokok/Margin), Tunggakan Akhir (Pokok/Bln), Tgl JT, Nama AO, serta grup produk (mis. 541 / PEMBIAYAAN MURABAHAH ANGSURAN).</p>
   </div>`;
@@ -1094,13 +1211,13 @@ function doUpload(){
         const r=await syncSend('arsip',{cab:cb,tgl:tglData,nama:rr[0].cabang_nama||cb,file:f.name,rows:rr});
         if(r.ok&&r.res&&r.res.arsip){arsipMsg+=' \u2022 \u2601\uFE0F Google Drive: '+r.res.arsip.name;
           const o=await arsipGet(cb+'|'+tglData).catch(()=>null);if(o){o.drive=true;await arsipPut(o).catch(()=>{})}}
-        else arsipMsg+=' \u2022 \u26A0 Drive BELUM tersimpan ('+cb+'): '+(r.ok?'server belum diperbarui (pasang Code.gs v3)':r.error)+' \u2014 kirim ulang dari menu Arsip Upload'}}
+        else arsipMsg+=' \u2022 \u26A0 Drive BELUM tersimpan ('+cb+'): '+(r.ok?'server belum diperbarui (pasang Code.gs v3)':r.error)+' \u2014 kirim ulang dari menu Pengaturan Umum \u203A Arsip Upload'}}
       if((document.getElementById('upDl')||{}).checked){
         const nm='arsip-'+[...cabs].join('_')+'-'+tglData+(/\.(xls|xml)$/i.test(f.name)?f.name.slice(f.name.lastIndexOf('.')):'.xls');
         const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([e.target.result],{type:'application/vnd.ms-excel'}));a.download=nm;
         document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);arsipMsg+=' \u2022 salinan diunduh: '+nm}
       const nAO=new Set(rows.map(r=>r.ao)).size;
-      document.getElementById('upMsg').innerHTML=`<div class="notif ok">\u2714 Berhasil! ${rows.length} rekening dimuat, <b>otomatis terbagi ke ${nAO} kelompok AO</b>. Lanjutkan di menu <b>Pembagian Data AO</b> untuk mengaitkan ke akun petugas.</div>`;
+      document.getElementById('upMsg').innerHTML=`<div class="notif ok">\u2714 Berhasil! ${rows.length} rekening dimuat, <b>otomatis terbagi ke ${nAO} kelompok AO</b>. Lanjutkan di menu <b>Pengaturan Umum \u203A Pembagian Data AO</b> untuk mengaitkan ke akun petugas.</div>`;
       const rw=RIWAYAT.filter(r=>cabs.has(r.cabang)&&r.tgl===tglData);
       document.getElementById('upMsg').innerHTML+=rw.map(r=>`<div class="notif ok" style="display:block;margin-top:8px">\uD83D\uDCC8 <b>${esc(r.cabang)} ${esc(r.nama)}</b> vs upload sebelumnya: ${ringkasDiff(r)}</div>`).join('')+'<p class="mut" style="margin-top:6px">Detail: menu <b>Riwayat Mingguan</b>.</p>';
       document.getElementById('upMsg').innerHTML+='<div class="notif ok" style="display:block;margin-top:8px">'+esc(arsipMsg)+'</div>';
@@ -1290,6 +1407,26 @@ function cairCetak(){
   <tr><th colspan="6" class="r">Total (${rows.length})</th><th class="r">${rp(tot)}</th><th colspan="2"></th></tr></table>
   <script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();
 }
+/* ================= PENGATURAN UMUM (gabungan: Pembagian Data AO, Kelola Akun, Arsip Upload) ================= */
+let SETTAB='ao';
+const SETTABS=[{id:'ao',t:'Pembagian Data AO',fn:()=>pgAO()},{id:'usr',t:'Kelola Akun',fn:()=>pgUsr()},{id:'ars',t:'Arsip Upload',fn:()=>pgArs()}];
+function setTabsHtml(){return '<div id="setTabs" class="set-tabs">'+SETTABS.map(t=>'<button type="button" class="'+(t.id===SETTAB?'on':'')+'" onclick="setTab(\''+t.id+'\')">'+esc(t.t)+'</button>').join('')+'</div>'}
+function setTab(id){SETTAB=id;pgSet()}
+function pgSet(){
+  if(!SETTABS.some(t=>t.id===SETTAB))SETTAB='ao';
+  SETTABS.find(t=>t.id===SETTAB).fn();
+  setTabsInject();
+}
+function setTabsInject(){
+  if(PAGE!=='set')return;
+  const c=document.getElementById('content');if(!c)return;
+  const old=document.getElementById('setTabs');
+  if(old){if(c.firstElementChild===old){old.outerHTML=setTabsHtml();return}old.remove()}
+  c.insertAdjacentHTML('afterbegin',setTabsHtml());
+}
+/* pgArs memuat data secara async lalu menggambar ulang isi halaman -> pasang kembali tab setelahnya */
+window.addEventListener('load',()=>{const c=document.getElementById('content');if(c)new MutationObserver(()=>{if(PAGE==='set'&&!document.getElementById('setTabs'))setTabsInject()}).observe(c,{childList:true})});
+
 /* ================= ARSIP UPLOAD (IndexedDB, kunci = cabang|tanggal data) ================= */
 function arsipDB(){return new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('IndexedDB tidak tersedia'));
   const q=indexedDB.open('kop_arsip',1);q.onupgradeneeded=()=>q.result.createObjectStore('a',{keyPath:'key'});q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
@@ -1302,7 +1439,7 @@ async function pgArs(){
   document.getElementById('content').innerHTML='<div class="panel"><h3>\uD83D\uDDC4\uFE0F Arsip Upload</h3><p class="mut">Memuat\u2026</p></div>';
   let list=[];let err='';
   try{list=(await arsipAll()).sort((a,b)=>a.tgl<b.tgl?1:a.tgl>b.tgl?-1:a.cab.localeCompare(b.cab))}catch(e){err=e.message}
-  if(PAGE!=='ars')return;
+  if(PAGE!=='set'||SETTAB!=='ars')return;
   document.getElementById('content').innerHTML=`<div class="panel"><h3>\uD83D\uDDC4\uFE0F Arsip Upload</h3>
   <p class="mut" style="margin-bottom:10px">Setiap upload tersimpan terpisah menurut <b>cabang + tanggal data</b>, jadi upload minggu atau bulan berikutnya tidak menimpa yang lama. Arsip ada di browser perangkat ini \u2014 simpan juga salinan unduhannya di tempat aman (Google Drive / flashdisk).</p>
   ${err?`<div class="notif bad" style="display:block">\u26A0 ${esc(err)}</div>`:''}
@@ -1703,7 +1840,7 @@ function pgSync(){
 function pgRpt(){
   const aos=[...new Set(myData().map(d=>d.ao))].sort();
   document.getElementById('content').innerHTML=`
-  <div class="panel"><h3>\uD83D\uDDA8\uFE0F Laporan & Lampiran Cetak</h3>
+  <div class="panel"><h3>\uD83C\uDFAF Analisa Kinerja & Lampiran Cetak</h3>
     ${SES.role==='admin'?`    <div class="panel" style="background:#f6f9f8">
       <h3 style="margin-bottom:6px">\uD83D\uDCCA Analisa Kondisi OS</h3>
       <p class="mut">Rangkuman kondisi outstanding, nasabah lunas, grafik kinerja, laporan pencairan, dan analisa laporan kunjungan \u2014 siap cetak / simpan PDF.</p>
@@ -2516,6 +2653,10 @@ const HOME_ICON={
     +'<path d="M48.5 47.5l9 9" fill="none" stroke="url(#hs4)" stroke-width="6.5" stroke-linecap="round"/>'
     +'<circle cx="40" cy="38" r="14" fill="url(#hs2)"/><circle cx="40" cy="38" r="9" fill="url(#hs3)" opacity=".95"/>'
     +'<ellipse cx="34" cy="29.5" rx="5.5" ry="1.9" fill="#fff" opacity=".55" transform="rotate(-35 34 29.5)"/>')},
+  kalk:{tint:'#e3f0ff',svg:hiSvg(hiG('hk1','#7fb8ff','#2a62d9')+hiG('hk2','#ffffff','#dbe8f6')+hiG('hk3','#ffe08a','#f0a92e'),
+    '<rect x="12" y="6" width="40" height="52" rx="9" fill="url(#hk1)"/><rect x="18" y="12" width="28" height="14" rx="4" fill="url(#hk2)"/><rect x="22" y="17" width="14" height="3.2" rx="1.6" fill="#9db6d6"/>'
+    +[0,1,2].map(r=>[0,1,2].map(c=>'<rect x="'+(18+c*10)+'" y="'+(32+r*9)+'" width="8" height="6.5" rx="2.2" fill="'+(r===2&&c===2?'url(#hk3)':'#fff')+'" opacity="'+(r===2&&c===2?1:.92)+'"/>').join('')).join('')
+    +'<ellipse cx="24" cy="9.5" rx="9" ry="2.2" fill="#fff" opacity=".35" transform="rotate(-12 24 9.5)"/>')},
   up:{tint:'#e0f0ff',svg:hiSvg(hiG('hu1','#96d4ff','#2f7be8'),
     '<path d="M20 47a9 9 0 0 1-1-18a13 13 0 0 1 25-4a11 11 0 0 1 3 22z" fill="url(#hu1)"/>'
     +'<path d="M32 43V29M25.5 35L32 28.5L38.5 35" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>'
@@ -2523,18 +2664,19 @@ const HOME_ICON={
   rw:{tint:'#e8eff7',svg:hiSvg(hiG('hr1','#ffffff','#e3ecf4')+hiG('hr2','#63d3b9','#0e8a73')+hiG('hr3','#ffd873','#f0a92e')+hiG('hr4','#94c5ff','#2f7be8'),
     '<rect x="9" y="11" width="46" height="42" rx="9" fill="url(#hr1)"/><rect x="16" y="33" width="8" height="14" rx="2.5" fill="url(#hr2)"/><rect x="28" y="24" width="8" height="23" rx="2.5" fill="url(#hr3)"/><rect x="40" y="17" width="8" height="30" rx="2.5" fill="url(#hr4)"/>'
     +'<path d="M14 50h36" stroke="#cdd9e3" stroke-width="2" stroke-linecap="round"/>')},
-  ars:{tint:'#f8ecdb',svg:hiSvg(hiG('ha1','#ecca9f','#bd9160')+hiG('ha2','#f8dfbb','#d6a875'),
-    '<rect x="11" y="28" width="42" height="27" rx="5" fill="url(#ha1)"/><rect x="8" y="15" width="48" height="15" rx="5" fill="url(#ha2)"/><rect x="25" y="36" width="14" height="6" rx="3" fill="#8a6338"/><rect x="11" y="28" width="42" height="3" fill="#000" opacity=".08"/>')},
-  rpt:{tint:'#e6edf4',svg:hiSvg(hiG('hq1','#b9cadb','#5f7e9b')+hiG('hq2','#ffffff','#e0e9f1'),
-    '<rect x="19" y="8" width="26" height="18" rx="3" fill="url(#hq2)"/><rect x="9" y="22" width="46" height="24" rx="7" fill="url(#hq1)"/><rect x="17" y="38" width="30" height="18" rx="3" fill="url(#hq2)"/>'
-    +'<rect x="22" y="43" width="20" height="2.6" rx="1.3" fill="#b8c7d6"/><rect x="22" y="49" width="14" height="2.6" rx="1.3" fill="#b8c7d6"/><circle cx="47" cy="30" r="2.4" fill="#5ee6a0"/>')},
+  rpt:{tint:'#e3f1ff',svg:hiSvg(hiG('hq1','#ffffff','#dde9f5')+hiG('hq2','#6cc0ff','#2563eb')+hiG('hq3','#ffd873','#f0a92e')+hiG('hq4','#ff9382','#d9382b'),
+    '<rect x="7" y="9" width="50" height="46" rx="10" fill="url(#hq1)"/>'
+    +'<path d="M14 40a18 18 0 0 1 36 0" fill="none" stroke="#cdd9e4" stroke-width="7" stroke-linecap="round"/>'
+    +'<path d="M14 40a18 18 0 0 1 9-15.6" fill="none" stroke="url(#hq4)" stroke-width="7" stroke-linecap="round"/>'
+    +'<path d="M23 24.4a18 18 0 0 1 18 0" fill="none" stroke="url(#hq3)" stroke-width="7" stroke-linecap="round"/>'
+    +'<path d="M41 24.4a18 18 0 0 1 9 15.6" fill="none" stroke="#35c28a" stroke-width="7" stroke-linecap="round"/>'
+    +'<path d="M32 40l9-12" stroke="#1e3a8a" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="40" r="5" fill="url(#hq2)"/>'
+    +'<rect x="16" y="47" width="32" height="3" rx="1.5" fill="#cdd9e4"/>')},
   sync:{tint:'#dcf3f0',svg:hiSvg(hiG('hs1','#55d6c5','#0e8a8a'),
     '<circle cx="32" cy="32" r="25" fill="url(#hs1)"/>'
     +'<path d="M17.5 32a14.5 14.5 0 0 1 24.5-10.5" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/><path d="M45.5 14.5v12.5h-12.5z" fill="#fff" transform="rotate(8 40 22)"/>'
     +'<path d="M46.5 32a14.5 14.5 0 0 1-24.5 10.5" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/><path d="M18.5 49.5v-12.5h12.5z" fill="#fff" transform="rotate(8 24 42)"/>')},
-  ao:{tint:'#eee6ff',svg:hiSvg(hiG('hv1','#c7a9ff','#7a4fd8')+hiG('hv2','#e5d8ff','#ab8eee'),
-    '<circle cx="43" cy="21" r="7" fill="url(#hv2)"/><path d="M30 49a13 13 0 0 1 26 0z" fill="url(#hv2)"/><circle cx="25" cy="24" r="9" fill="url(#hv1)"/><path d="M8 54a17 17 0 0 1 34 0z" fill="url(#hv1)"/>')},
-  usr:{tint:'#ffe9d8',svg:hiSvg(hiG('hg1','#ffbc7a','#e8731c'),
+  set:{tint:'#ffe9d8',svg:hiSvg(hiG('hg1','#ffbc7a','#e8731c'),
     hiGear()+'<circle cx="32" cy="32" r="18" fill="url(#hg1)"/><circle cx="32" cy="32" r="7.5" fill="#fff4e8"/><ellipse cx="24" cy="22" rx="7" ry="2.4" fill="#fff" opacity=".3" transform="rotate(-35 24 22)"/>')}
 };
 function jtCountBulanIni(){
