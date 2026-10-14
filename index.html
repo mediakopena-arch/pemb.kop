@@ -556,7 +556,7 @@ const PAGES=[
   {id:'rw',t:'\uD83D\uDCC8 Riwayat Mingguan',fn:()=>pgRw(),admin:true},
   {id:'ars',t:'\uD83D\uDDC4\uFE0F Arsip Upload',fn:()=>pgArs(),admin:true},
   {id:'slik',t:'\uD83D\uDD0D Baca SLIK',fn:()=>pgSlik(),admin:true,keep:true},
-  {id:'rpt',t:'\uD83D\uDDA8\uFE0F Laporan',fn:()=>pgRpt()},
+  {id:'rpt',t:'\uD83D\uDDA8\uFE0F Laporan',fn:()=>pgRpt(),keep:true},
   {id:'sync',t:'\uD83D\uDD04 Sinkronisasi',fn:()=>pgSync()},
   {id:'ao',t:'\uD83D\uDC65 Pembagian Data AO',fn:()=>pgAO(),admin:true},
   {id:'usr',t:'\u2699\uFE0F Kelola Akun',fn:()=>pgUsr(),admin:true}
@@ -1722,6 +1722,9 @@ function pgRpt(){
         <select id="rSort"><option value="nama">Lampiran urut: Nama</option><option value="rek">Lampiran urut: No. Rekening</option></select>
         <button class="btn-a" onclick="cetakAnalisa()">\uD83D\uDDA8\uFE0F Cetak / Simpan PDF</button>
       </div>
+      <div class="toolbar"><button class="btn-a" id="aiBtn" onclick="analisaAI()">\uD83E\uDD16 Analisa AI</button></div>
+      <p class="mut">AI hanya menerima angka ringkasan (tanpa nama nasabah / no. rekening). Saran AI perlu diperiksa sebelum dipakai.</p>
+      <div id="aiOut"></div>
       <p class="mut">Periode berlaku untuk pencairan dan kunjungan. Kondisi OS memakai data aktif terakhir.</p>
     </div>`:''}
     <div class="panel" style="background:#f6f9f8">
@@ -1844,6 +1847,93 @@ function blokBanding(B,primary,perAO){
     ${d.keluar.slice().sort((x,y)=>y[4]-x[4]).slice(0,primary?200:10).map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${collLabel(r[3])}</td><td class="num">${rp(r[4])}</td></tr>`).join('')}</table>`:'<p>Tidak ada.</p>';
   if(primary)h+=tb('Rekening baru',d.baru,['Coll','Outstanding'],v=>v<=5?collLabel(v):rp(v),10);
   return h;
+}
+/* ===== Analisa AI: hanya ANGKA RINGKASAN yang dikirim (tanpa nama nasabah / no. rekening) ===== */
+async function ringkasAI(){
+  const ao=document.getElementById('rAO')?.value||'';
+  const mode=(document.getElementById('rBanding')||{}).value||'both';
+  const dari=document.getElementById('rDari').value,sampai=document.getElementById('rSampai').value;
+  if(!dari||!sampai||dari>sampai)return {err:'Periode tidak valid \u2014 isi "Dari" dan "Sampai" dengan benar'};
+  const rows=myData().filter(d=>!ao||d.ao===ao);
+  if(!rows.length)return {err:'Tidak ada data nasabah pada pilihan ini'};
+  const rekSet=new Set(rows.map(d=>d.rekening)),aoSet=new Set(rows.map(d=>d.ao)),cabs=[...new Set(rows.map(cabOf))];
+  const inP=t=>t>=dari&&t<=sampai;
+  const penFor=a=>cairVisible().filter(r=>inP(r.tanggalISO)&&(!a||r.user===AOMAP[a]||String(r.petugas).toUpperCase()===a.toUpperCase()));
+  const lap=LAP.filter(l=>rekSet.has(l.rekening)&&inP(l.tanggalISO||''));
+  const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0);
+  const tung=d=>Math.max(0,d.tak_pokok||0);
+  const pct=(a,b)=>b?Math.round(a/b*1000)/10:0;
+  const uniq=new Set(lap.map(l=>l.rekening));
+  const prio=d=>(collOf(d)>=2||tung(d)>0)&&!d.sudah_angsur&&!uniq.has(d.rekening);
+  const tot=sum(rows,d=>d.outstanding),tg=sum(rows,tung),sudah=rows.filter(d=>d.sudah_angsur).length;
+  const byC=[1,2,3,4,5].map(c=>{const g=rows.filter(d=>collOf(d)===c);return{coll:c+' '+collLabel(c),rekening:g.length,os:sum(g,d=>d.outstanding),tunggakan_pokok:sum(g,tung)}});
+  const npl=sum(byC.slice(2),x=>x.os);
+  /* pembanding (sama seperti cetak analisa) */
+  const names=ao?[ao]:(SES.role==='admin'?null:[...aoSet]);
+  const rwE=RIWAYAT.filter(r=>cabs.includes(r.cabang));
+  const lastE=cabs.map(cb=>rwE.filter(r=>r.cabang===cb).slice(-1)[0]).filter(Boolean);
+  const scopeAll=!ao&&SES.role==='admin';
+  const curSt=statRows(rows);
+  const bands=[];
+  try{
+    for(const m of (mode==='both'?['prev','bulan']:[mode])){
+      const B=await ambilBanding(m,cabs);
+      if(B&&!bands.some(x=>x.tgl.join()===B.tgl.join()))bands.push(hitungBand(B,curSt,{names,scopeAll,aoSet,cabs,lastE}));
+    }
+  }catch(e){}
+  const banding=bands.map(B=>{const a=B.st,c=curSt;return{pembanding:(B.mode==='bulan'?'awal bulan ':'upload sebelumnya ')+B.tgl.map(fmtTgl).join('/'),
+    os_sebelum:a.os,os_sekarang:c.os,tunggakan_sebelum:a.tg,tunggakan_sekarang:c.tg,
+    sudah_angsur_sebelum:a.sd+' dari '+a.n,sudah_angsur_sekarang:c.sd+' dari '+c.n,
+    coll_memburuk:B.df?B.df.naik.length:null,coll_membaik:B.df?B.df.turun.length:null,rekening_keluar_lunas:B.df?B.df.keluar.length:null}});
+  const pen=penFor(ao);
+  const janji=lap.filter(l=>l.hasil==='Janji bayar'),bayar=lap.filter(l=>l.hasil==='Sudah membayar'),tjk=lap.filter(l=>TAK_JANGKAU.includes(l.hasil));
+  const pr=rows.filter(prio);
+  const grp=(keyFn,arr)=>{const m={};arr.forEach(d=>{const k=keyFn(d);(m[k]=m[k]||[]).push(d)});return m};
+  const perCab=Object.entries(grp(cabOf,rows)).map(([k,g])=>({cabang:k+((CABANGS.find(c=>c.kode===k)||{}).nama?' '+CABANGS.find(c=>c.kode===k).nama:''),rekening:g.length,os:sum(g,d=>d.outstanding),
+    tunggakan_pokok:sum(g,tung),os_coll3_5:sum(g.filter(d=>collOf(d)>=3),d=>d.outstanding),sudah_angsur:g.filter(d=>d.sudah_angsur).length,prioritas_belum_dikunjungi:g.filter(prio).length}));
+  const perAO=[...aoSet].sort().map(a=>{const g=rows.filter(d=>d.ao===a),lp=lap.filter(l=>l.ao===a),u=new Set(lp.map(l=>l.rekening)),pe=penFor(a),p2=g.filter(prio);
+    return{ao:a,cabang:cabOf(g[0]),rekening:g.length,os:sum(g,d=>d.outstanding),tunggakan_pokok:sum(g,tung),os_coll3_5:sum(g.filter(d=>collOf(d)>=3),d=>d.outstanding),
+      sudah_angsur:g.filter(d=>d.sudah_angsur).length,call:lp.length,nasabah_dikunjungi:u.size,pencairan_rek:pe.length,pencairan_nominal:sum(pe,r=>r.nominal),
+      prioritas_belum_dikunjungi:p2.length,prioritas_tunggakan:sum(p2,tung)}}).sort((x,y)=>y.os-x.os);
+  const MAXAO=40;
+  const data={lingkup:ao?('AO '+ao):(scopeAll?'Semua AO (seluruh data yang terlihat)':'Data Anda'),periode:{dari,sampai},
+    total:{rekening:rows.length,os:tot,tunggakan_pokok:tg,os_bermasalah_coll3_5:npl,rasio_bermasalah_pct:pct(npl,tot),sudah_angsur:sudah,belum_angsur:rows.length-sudah},
+    per_coll:byC,perbandingan:banding,
+    pencairan:{rekening:pen.length,nominal:sum(pen,r=>r.nominal)},
+    kunjungan:{catatan:lap.length,nasabah_unik:uniq.size,cakupan_pct:pct(uniq.size,rows.length),janji_bayar:janji.length,sudah_membayar:bayar.length,tidak_terjangkau:tjk.length},
+    nasabah_prioritas_belum_dikunjungi:{rekening:pr.length,tunggakan_pokok:sum(pr,tung)},
+    per_cabang:perCab,per_ao:perAO.slice(0,MAXAO)};
+  if(perAO.length>MAXAO)data.catatan_data='Hanya '+MAXAO+' AO dengan OS terbesar yang disertakan dari total '+perAO.length+' AO.';
+  return {data};
+}
+function pesanAI(e){
+  return ({ai_belum_diatur:'Fitur AI belum diaktifkan di server (kunci/model belum diisi).',ai_batas_harian:'Jatah analisa AI hari ini sudah habis. Coba lagi besok.',
+    ai_sibuk:'Layanan AI sedang penuh / batas gratis tercapai. Coba lagi beberapa menit lagi.',ai_galat:'Layanan AI gagal merespons. Coba lagi nanti.',
+    ai_kosong:'AI tidak memberi jawaban. Coba lagi.',terlalu_besar:'Ringkasan terlalu besar. Pilih satu AO atau persempit data.',dilarang:'Fitur ini hanya untuk Admin.'})[e]||String(e||'Gagal');
+}
+async function analisaAI(){
+  const out=document.getElementById('aiOut'),btn=document.getElementById('aiBtn');
+  if(!out)return;
+  if(btn)btn.disabled=true;
+  try{
+    out.innerHTML='<p class="mut">\u23F3 Menyiapkan ringkasan angka\u2026</p>';
+    const R=await ringkasAI();
+    if(R.err){out.innerHTML='';notify(R.err,false);return}
+    out.innerHTML='<p class="mut">\u23F3 AI sedang menganalisa (bisa 10\u201330 detik)\u2026</p>';
+    const j=await apiCall('analisa_ai',{ringkas:R.data});
+    if(!j||!j.ok){out.innerHTML='';notify(pesanAI(j&&j.error),false);return}
+    window._aiTeks=j.teks;
+    out.innerHTML='<div class="panel" style="background:#fff;margin-top:8px"><h3 style="margin-bottom:6px">\uD83E\uDD16 Analisa AI</h3>'
+      +'<div style="white-space:pre-wrap;line-height:1.55">'+esc(j.teks)+'</div>'
+      +'<div class="toolbar" style="margin-top:8px"><button class="btn-a" onclick="salinAI()">\uD83D\uDCCB Salin</button></div>'
+      +'<p class="mut">Dibuat AI dari angka ringkasan; periksa sebelum bertindak.'+(j.sisa!=null?' Sisa analisa hari ini: '+j.sisa+'.':'')+'</p></div>';
+  }catch(e){out.innerHTML='';notify('Gagal: '+e.message,false)}
+  finally{if(btn)btn.disabled=false}
+}
+function salinAI(){
+  const t=window._aiTeks||'';
+  if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>notify('Teks disalin'),()=>notify('Gagal menyalin',false));
+  else notify('Browser tidak mendukung salin otomatis',false);
 }
 async function cetakAnalisa(){
   const ao=SES.role==='admin'?(document.getElementById('rAO')?.value||''):'';
