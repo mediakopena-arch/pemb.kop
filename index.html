@@ -206,7 +206,26 @@ nav a svg{flex:0 0 18px}
 .hm-sel{margin-top:14px}
 .hm-sel select{background:rgba(255,255,255,.2);font-size:14px;padding:10px 12px;text-shadow:none}
 .hm-grid{gap:22px 10px;margin-bottom:30px}
-@media(prefers-reduced-motion:reduce){.hm-top{animation:none}}
+.hm-top .hm-hrow{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:0 2px 14px}
+.hm-top .hm-hrow .hm-hello{margin:0;min-width:0}
+.hm-upd{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:8px 13px;min-height:38px;border-radius:999px;border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.2);color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);text-shadow:0 1px 2px rgba(0,40,30,.35)}
+.hm-upd:hover,.hm-upd:active{background:rgba(255,255,255,.32)}
+.hm-upd svg{display:block}
+.hm-upd.busy{opacity:.75;pointer-events:none}
+.hm-upd.busy svg{animation:hmSpin .9s linear infinite}
+@keyframes hmSpin{to{transform:rotate(360deg)}}
+/* ===== animasi diagram saat menu dibuka ===== */
+.vz-sweep{animation:vzSweep 1.15s cubic-bezier(.45,.05,.25,1) both}
+@keyframes vzSweep{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
+.vz-rise{transform-origin:0 150px;animation:vzRise .85s cubic-bezier(.2,.8,.2,1) both}
+@keyframes vzRise{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.vz-gx{animation:vzGrowX .85s cubic-bezier(.2,.8,.2,1) both}
+@keyframes vzGrowX{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.vz-pop{animation:vzPop .55s ease-out .75s both}
+@keyframes vzPop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.vz-bar .t i,.slk .bar>span{transform-origin:left center;animation:vzGrowX .9s cubic-bezier(.2,.8,.2,1) both}
+@media print{.vz-sweep,.vz-rise,.vz-gx,.vz-pop,.vz-bar .t i,.slk .bar>span{animation:none!important}}
+@media(prefers-reduced-motion:reduce){.hm-top{animation:none}.hm-upd.busy svg{animation:none}.vz-sweep,.vz-rise,.vz-gx,.vz-pop,.vz-bar .t i,.slk .bar>span{animation:none!important}}
 /* navigasi bawah */
 #bnav{display:none}
 .m-brand{display:none}
@@ -891,6 +910,12 @@ function renderLapList(){
 
 /* ================= DIAGRAM (SVG murni) ================= */
 const VZ_COLL={1:'#1c9a57',2:'#e0b000',3:'#e07b1a',4:'#c0392b',5:'#4a1512'};
+let VZ_MID=0;
+/* mask "sapuan" memutar searah jarum jam dari jam 12 -> donat tampil berputar saat dibuka */
+function vzMask(cx,cy,rx,ry,dep,H){
+  const id='vzm'+(++VZ_MID);
+  return {id,defs:'<defs><mask id="'+id+'" maskUnits="userSpaceOnUse" x="0" y="0" width="300" height="'+H+'"><g transform="translate('+cx+','+(cy+dep/2)+') scale(1,'+((ry+dep)/rx).toFixed(4)+') rotate(-90)"><circle r="'+(rx/2)+'" fill="none" stroke="#fff" stroke-width="'+rx+'" pathLength="100" stroke-dasharray="100 100" stroke-dashoffset="0" class="vz-sweep"/></g></mask></defs>'};
+}
 function vzDonut(items,ctr,sub,clk){
   const tot=items.reduce((a,x)=>a+x.v,0);
   if(!(tot>0))return '<p class="mut" style="padding:34px 0;text-align:center">Belum ada data</p>';
@@ -903,11 +928,14 @@ function vzDonut(items,ctr,sub,clk){
     return 'M'+f(o0[0])+','+f(o0[1]+dy)+' A'+rx+','+ry+' 0 '+lg+' 1 '+f(o1[0])+','+f(o1[1]+dy)+' L'+f(i1[0])+','+f(i1[1]+dy)+' A'+f(rx*k)+','+f(ry*k)+' 0 '+lg+' 0 '+f(i0[0])+','+f(i0[1]+dy)+' Z';
   };
   let g='<svg viewBox="0 0 300 '+(cy+ry+dep+14)+'" role="img">';
+  const mk=vzMask(cx,cy,rx,ry,dep,cy+ry+dep+14);g+=mk.defs;
   g+='<ellipse cx="'+cx+'" cy="'+(cy+dep+ry*.85)+'" rx="'+f(rx*.9)+'" ry="'+f(ry*.4)+'" fill="rgba(14,60,50,.10)"/>';
+  g+='<g mask="url(#'+mk.id+')">';
   for(let d=dep;d>=1;d-=1.5)sl.forEach(z=>{const c=jtShade(z.c,.62);g+='<path d="'+path(z,d)+'" fill="'+c+'" stroke="'+c+'" stroke-width=".6"/>'});
   sl.forEach(z=>{g+='<path d="'+path(z,0)+'" fill="'+z.c+'" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>'});
-  g+='<text x="'+cx+'" y="'+(cy+9)+'" text-anchor="middle" font-size="16" font-weight="700" fill="#0a4f43">'+esc(ctr)+'</text>';
-  g+='<text x="'+cx+'" y="'+(cy+22)+'" text-anchor="middle" font-size="10" fill="#7a8a86">'+esc(sub)+'</text></svg>';
+  g+='</g>';
+  g+='<text class="vz-pop" x="'+cx+'" y="'+(cy+9)+'" text-anchor="middle" font-size="16" font-weight="700" fill="#0a4f43">'+esc(ctr)+'</text>';
+  g+='<text class="vz-pop" x="'+cx+'" y="'+(cy+22)+'" text-anchor="middle" font-size="10" fill="#7a8a86">'+esc(sub)+'</text></svg>';
   const leg=items.filter(x=>x.v>0).map(x=>'<span><i style="background:'+x.c+'"></i>'+esc(x.l)+' <b>'+x.v.toLocaleString('id-ID')+'</b> \u00B7 '+(x.v/tot<.005?'<1':Math.round(x.v/tot*100))+'%</span>').join('');
   if(clk){
     const tl=items.filter(x=>x.v>0).map(x=>'<button type="button" class="vz-tile" style="border-left-color:'+x.c+'" onclick="'+clk+"('"+x.k+"')"+'"><small>'+esc(x.l)+'</small><b style="color:'+x.c+'">'+x.v.toLocaleString('id-ID')+'</b><em>'+(x.v/tot<.005?'<1':Math.round(x.v/tot*100))+'% \u00B7 klik lihat nama</em></button>').join('');
@@ -927,10 +955,11 @@ function vzBars(items,fmt){
     const lb=String(it.s||it.l);let ln=[lb];
     if(lb.length>9&&lb.indexOf(' ')>0){const m=Math.floor(lb.length/2);let k=lb.lastIndexOf(' ',m);if(k<=0)k=lb.indexOf(' ');ln=[lb.slice(0,k),lb.slice(k+1)]}
     ln=ln.map(t=>t.length>10?t.slice(0,9)+'\u2026':t);
+    g+='<g class="vz-rise" style="animation-delay:'+(i*90)+'ms">';
     g+='<polygon points="'+x+','+y+' '+(x+dx)+','+(y-dy)+' '+(x+bw+dx)+','+(y-dy)+' '+(x+bw)+','+y+'" fill="'+jtShade(col,1.4)+'"/>';
     g+='<polygon points="'+(x+bw)+','+y+' '+(x+bw+dx)+','+(y-dy)+' '+(x+bw+dx)+','+(150-dy)+' '+(x+bw)+',150" fill="'+jtShade(col,.7)+'"/>';
-    g+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" fill="'+col+'"/>';
-    g+='<text x="'+tx+'" y="'+(y-dy-5)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1e2b28">'+(val>0?esc(fmt(val)):'-')+'</text>';
+    g+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" fill="'+col+'"/></g>';
+    g+='<text class="vz-pop" style="animation-delay:'+(i*90+520)+'ms" x="'+tx+'" y="'+(y-dy-5)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1e2b28">'+(val>0?esc(fmt(val)):'-')+'</text>';
     ln.forEach((t,j)=>{g+='<text x="'+tx+'" y="'+(168+j*11)+'" text-anchor="middle" font-size="9.5" fill="#4d5d59">'+esc(t)+'</text>'});
     if(it.full)pl+='<div><i style="background:'+col+'"></i><b>'+esc(it.s)+'</b> \u2014 '+esc(it.full)+'</div>';
   });
@@ -1821,18 +1850,17 @@ function pgSync(){
     ${SYNC_INFO?`<br>Update server terakhir: ${esc(SYNC_INFO)}`:''}</p>
     <p id="stInfo" class="mut" style="margin-bottom:10px"></p>
     <div class="toolbar">
-      <button class="btn-p" style="width:auto;margin:0" onclick="syncPull(true)">\u2B07\uFE0F Tarik data terbaru</button>
       ${pusat?`<button class="btn-a" onclick="syncPush('data')">\u2B06\uFE0F Kirim data (semua cabang)</button>
       <button class="btn-s" onclick="syncPush('aomap')">\u2B06\uFE0F Pemetaan AO</button>
       <button class="btn-s" onclick="syncPush('cabangs')">\u2B06\uFE0F Cabang</button>
       <button class="btn-s" onclick="syncPush('laporan')">\u2B06\uFE0F Kirim laporan</button>
       <button class="btn-s" onclick="syncPush('pencairan')">\u2B06\uFE0F Kirim pencairan</button>`:
-      `<span class="mut">Laporan Anda terkirim otomatis tiap menyimpan. Data diatur admin \u2014 Anda cukup menarik data terbaru.</span>`}
+      `<span class="mut">Laporan Anda terkirim otomatis tiap menyimpan. Data diatur admin. Untuk mengambil data terbaru, gunakan tombol <b>Perbarui Data</b> di Beranda.</span>`}
     </div>
     <p class="mut" style="margin-top:10px"><b>Alur kerja yang disarankan:</b><br>
     1. <b>Pusat</b> upload file Excel tiap cabang \u2192 klik <b>Kirim data</b> (semua cabang) \u2192 klik <b>Akun</b>, <b>Pemetaan AO</b>, <b>Cabang</b> sekali saja.<br>
-    2. <b>Admin cabang</b>: sebelum mulai kerja klik <b>Tarik data terbaru</b> \u2014 data pusat & akun turun ke perangkatnya.<br>
-    3. <b>Petugas AO</b>: kirim laporan call \u2192 admin/Pusat klik <b>Tarik data terbaru</b> \u2192 semua laporan terkumpul.<br>
+    2. <b>Admin cabang</b>: sebelum mulai kerja klik <b>Perbarui Data</b> di Beranda \u2014 data pusat & akun turun ke perangkatnya.<br>
+    3. <b>Petugas AO</b>: kirim laporan call \u2192 admin/Pusat klik <b>Perbarui Data</b> di Beranda \u2192 semua laporan terkumpul.<br>
     Data di server digabung <b>per cabang</b> \u2014 file cabang yang dikirim cabang hanya menimpa data cabang itu sendiri, tidak menyentuh cabang lain.</p>
   </div>`;
 }
@@ -1891,8 +1919,8 @@ function svgBars(items,fmt,color){
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;-webkit-print-color-adjust:exact;print-color-adjust:exact" role="img">`+items.map((it,i)=>{
     const y=i*rh+2,w=Math.round((W-lw-95)*it.v/mx);
     return `<text x="${lw-6}" y="${y+13}" text-anchor="end" font-size="10" fill="#222">${esc(String(it.l).slice(0,26))}</text>`+
-      `<rect x="${lw}" y="${y+2}" width="${it.v>0?Math.max(2,w):0}" height="13" fill="${it.c||color||'#2f6f5e'}"/>`+
-      `<text x="${lw+w+4}" y="${y+13}" font-size="10" fill="#222">${esc(fmt?fmt(it.v):it.v)}</text>`}).join('')+`</svg>`;
+      `<rect class="vz-gx" style="transform-origin:${lw}px 0;animation-delay:${i*70}ms" x="${lw}" y="${y+2}" width="${it.v>0?Math.max(2,w):0}" height="13" fill="${it.c||color||'#2f6f5e'}"/>`+
+      `<text class="vz-pop" style="animation-delay:${i*70+500}ms" x="${lw+w+4}" y="${y+13}" font-size="10" fill="#222">${esc(fmt?fmt(it.v):it.v)}</text>`}).join('')+`</svg>`;
 }
 function svgTrend(labels,series){
   if(!labels.length)return '';
@@ -1903,7 +1931,7 @@ function svgTrend(labels,series){
   labels.forEach((lb,i)=>{
     const gx=pl+i*gw+(gw-bw*series.length)/2;
     series.forEach((s,k)=>{const h=Math.round((H-pt-pb)*s.v[i]/mx),x=gx+k*bw,y=H-pb-h;
-      o+=`<rect x="${x}" y="${y}" width="${bw-2}" height="${Math.max(s.v[i]>0?1:0,h)}" fill="${s.c}"/><text x="${x+(bw-2)/2}" y="${y-3}" text-anchor="middle" font-size="8.5" fill="#222">${esc(rpS(s.v[i]))}</text>`});
+      o+=`<rect class="vz-rise" style="transform-origin:0 ${H-pb}px;animation-delay:${i*80}ms" x="${x}" y="${y}" width="${bw-2}" height="${Math.max(s.v[i]>0?1:0,h)}" fill="${s.c}"/><text class="vz-pop" style="animation-delay:${i*80+500}ms" x="${x+(bw-2)/2}" y="${y-3}" text-anchor="middle" font-size="8.5" fill="#222">${esc(rpS(s.v[i]))}</text>`});
     o+=`<text x="${pl+i*gw+gw/2}" y="${H-10}" text-anchor="middle" font-size="9.5" fill="#222">${esc(lb.slice(5).split('-').reverse().join('/'))}</text>`});
   return o+`<line x1="${pl}" x2="${W-pl}" y1="${H-pb}" y2="${H-pb}" stroke="#666"/></svg>`;
 }
@@ -2363,11 +2391,14 @@ function jtDonut(g){
     return 'M'+f(o0[0])+','+f(o0[1]+dy)+' A'+rx+','+ry+' 0 '+lg+' 1 '+f(o1[0])+','+f(o1[1]+dy)+' L'+f(i1[0])+','+f(i1[1]+dy)+' A'+f(rx*k)+','+f(ry*k)+' 0 '+lg+' 0 '+f(i0[0])+','+f(i0[1]+dy)+' Z';
   };
   let s='<svg viewBox="0 0 300 '+(cy+ry+dep+14)+'" role="img" aria-label="Porsi outstanding per produk">';
+  const mk=vzMask(cx,cy,rx,ry,dep,cy+ry+dep+14);s+=mk.defs;
   s+='<ellipse cx="'+cx+'" cy="'+(cy+dep+ry*.85)+'" rx="'+f(rx*.9)+'" ry="'+f(ry*.4)+'" fill="rgba(14,60,50,.10)"/>';
+  s+='<g mask="url(#'+mk.id+')">';
   for(let d=dep;d>=1;d-=1.5)sl.forEach(z=>{const c=jtShade(z.c,.62);s+='<path d="'+path(z,d)+'" fill="'+c+'" stroke="'+c+'" stroke-width=".6"/>'});
   sl.forEach(z=>{s+='<path d="'+path(z,0)+'" fill="'+z.c+'" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>'});
-  s+='<text x="'+cx+'" y="'+(cy+9)+'" text-anchor="middle" font-size="16" font-weight="700" fill="#0a4f43">'+esc(rpS(tot))+'</text>';
-  s+='<text x="'+cx+'" y="'+(cy+22)+'" text-anchor="middle" font-size="10" fill="#7a8a86">outstanding</text></svg>';
+  s+='</g>';
+  s+='<text class="vz-pop" x="'+cx+'" y="'+(cy+9)+'" text-anchor="middle" font-size="16" font-weight="700" fill="#0a4f43">'+esc(rpS(tot))+'</text>';
+  s+='<text class="vz-pop" x="'+cx+'" y="'+(cy+22)+'" text-anchor="middle" font-size="10" fill="#7a8a86">outstanding</text></svg>';
   const leg=g.map((x,i)=>x.os>0?'<span><i style="background:'+JT_PAL[i%JT_PAL.length]+'"></i>'+esc(x.kode)+' \u00B7 '+(x.os/tot<.005?'<1':Math.round(x.os/tot*100))+'%</span>':'').join('');
   return s+'<div class="jt-leg">'+leg+'</div>';
 }
@@ -2392,10 +2423,11 @@ function jtBars(r){
   s+='<polygon points="8,153 22,144 294,144 280,153" fill="rgba(14,60,50,.07)"/>';
   v.forEach((val,i)=>{
     const h=val>0?Math.max(6,Math.round(val/mx*100)):3,x=24+i*66,y=150-h,col=(val===mx)?'#f0a92e':'#0e6e5d',tx=x+(bw+dx)/2;
+    s+='<g class="vz-rise" style="animation-delay:'+(i*90)+'ms">';
     s+='<polygon points="'+x+','+y+' '+(x+dx)+','+(y-dy)+' '+(x+bw+dx)+','+(y-dy)+' '+(x+bw)+','+y+'" fill="'+jtShade(col,1.4)+'"/>';
     s+='<polygon points="'+(x+bw)+','+y+' '+(x+bw+dx)+','+(y-dy)+' '+(x+bw+dx)+','+(150-dy)+' '+(x+bw)+',150" fill="'+jtShade(col,.7)+'"/>';
-    s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" fill="'+col+'"/>';
-    s+='<text x="'+tx+'" y="'+(y-dy-5)+'" text-anchor="middle" font-size="10" font-weight="700" fill="#1e2b28">'+(val>0?esc(rpS(val)):'-')+'</text>';
+    s+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" fill="'+col+'"/></g>';
+    s+='<text class="vz-pop" style="animation-delay:'+(i*90+520)+'ms" x="'+tx+'" y="'+(y-dy-5)+'" text-anchor="middle" font-size="10" font-weight="700" fill="#1e2b28">'+(val>0?esc(rpS(val)):'-')+'</text>';
     s+='<text x="'+tx+'" y="168" text-anchor="middle" font-size="10" fill="#4d5d59">'+esc(labels[i])+'</text>';
     s+='<text x="'+tx+'" y="180" text-anchor="middle" font-size="9" fill="#7a8a86">'+c[i]+' pinj.</text>';
   });
@@ -2554,10 +2586,10 @@ function jtLunPrintHtml(R){
 async function jtRenderLunas(){
   const box=document.getElementById('jtLun');if(!box)return;
   const seq=++JT_LUN_SEQ;
-  box.innerHTML='<p class="mut" style="margin:0 0 12px">\u23F3 Menghitung pelunasan\u2026</p>';
-  let R;try{R=await jtHitungLunas()}catch(e){if(seq===JT_LUN_SEQ)box.innerHTML='';return}
+  box.innerHTML='';  /* tampilan "Pelunasan bulan ini" disembunyikan (sudah ada di menu lain); data tetap dihitung untuk Analisa AI & cetak */
+  let R;try{R=await jtHitungLunas()}catch(e){return}
   if(seq!==JT_LUN_SEQ)return;
-  window._jtLun=R;box.innerHTML=jtLunHtml(R);
+  window._jtLun=R;
 }
 function jtAiRingkas(R){
   const r=jtRows(),rows=r.rows,sum=(a,f)=>a.reduce((s,x)=>s+f(x),0),tung=d=>Math.max(0,d.tak_pokok||0);
@@ -2699,6 +2731,10 @@ function homeSet(k,v){
   if(k==='cab'){HOME_CAB=v;HOME_AO=''}else HOME_AO=v;
   homeRender();
 }
+function homeUpd(btn){
+  if(btn){btn.classList.add('busy');btn.disabled=true}
+  Promise.resolve(syncPull(true)).finally(()=>{if(btn&&btn.isConnected){btn.classList.remove('busy');btn.disabled=false}})
+}
 function homeToggle(){HOME_HIDE=!HOME_HIDE;try{localStorage.setItem('homeHide',HOME_HIDE?'1':'0')}catch(e){}homeRender()}
 function homeRender(){const el=document.getElementById('homeTop');if(el)el.outerHTML=homeTop()}
 function snapVal(sn,aos,f){ /* nilai snapshot untuk seluruh data atau untuk daftar AO tertentu */
@@ -2741,7 +2777,8 @@ function homeTop(){
       +'<select onchange="homeSet(\'ao\',this.value)"><option value="">Semua AO</option>'+aol.map(a=>'<option value="'+esc(a)+'"'+(HOME_AO===a?' selected':'')+'>'+esc(a)+'</option>').join('')+'</select></div>';
   }
   const scope=adm?'':'<div class="hm-scope">Data milik Anda saja</div>';
-  return '<div class="hm-top" id="homeTop"><div class="hm-hello">'+sapa+',<b>'+esc(cap)+'</b></div>'
+  return '<div class="hm-top" id="homeTop"><div class="hm-hrow"><div class="hm-hello">'+sapa+',<b>'+esc(cap)+'</b></div>'
+   +'<button type="button" class="hm-upd" onclick="homeUpd(this)" aria-label="Perbarui Data">'+ico('sync',18)+'<span>Perbarui Data</span></button></div>'
    +'<div class="hm-bal"><small>Total Outstanding (OS)</small>'
    +'<div class="hm-amt"><span>'+mask(os)+'</span><button type="button" class="hm-eye" onclick="homeToggle()" aria-label="Tampil/sembunyi angka">'+ico(HOME_HIDE?'eyeoff':'eye',22)+'</button></div>'
    +chip
