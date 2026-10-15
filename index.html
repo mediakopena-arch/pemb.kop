@@ -3152,14 +3152,14 @@ $('slkOut').innerHTML='<div class="v" style="background:'+v[1]+'">'+v[0]+'<small
 +'</div>'
 +'<div class="c"><h2>Kalender</h2><div class="sc"><table><tr><th></th>'+BL.map(x=>'<th>'+x.slice(0,3)+'</th>').join('')+'</tr>'+cal+'</table></div></div>'
 +'<div class="c"><h2>Simulasi tambahan</h2><label class="mu">Angsuran baru (Rp)</label><input id="slkNb" inputmode="numeric" placeholder="1375000"><label class="mu">Penghasilan/bulan (Rp)</label><input id="slkPg" inputmode="numeric" placeholder="5000000"><div id="slkSim"></div></div>'
-+'<div class="c"><h2>\uD83E\uDD16 Saran AI untuk Pengajuan</h2><div class="mu">Opsional. Hanya saat tombol ditekan, ringkasan angka (tanpa nama, NIK, nama lembaga, dan alamat) dikirim ke AI untuk memberi saran dan masukan atas kondisi debitur yang sedang mengajukan.</div>'
++'<h2>Kontrak aktif</h2>'+kk
++agBlock
++'<div class="c"><h2>\uD83D\uDD0E Pandangan Lebih Dalam</h2><div class="mu">Opsional. Hanya saat tombol ditekan, ringkasan angka (tanpa nama, NIK, nama lembaga, dan alamat) dikirim untuk disusun menjadi saran dan masukan atas kondisi debitur yang sedang mengajukan.</div>'
 +'<label class="mu">Plafon diajukan (Rp)</label><input id="slkAiP" inputmode="numeric" placeholder="25000000">'
 +'<label class="mu">Tenor (bulan)</label><input id="slkAiT" inputmode="numeric" placeholder="24">'
 +'<label class="mu">Tujuan / usaha (opsional, jangan tulis nama)</label><input id="slkAiK" maxlength="120" placeholder="mis. modal warung sembako">'
 +'<div class="mu">Angsuran baru &amp; penghasilan diambil dari kolom Simulasi di atas bila diisi.</div>'
-+'<button type="button" class="btn" id="slkAiBtn" onclick="slkAI()">Minta saran AI</button><div id="slkAiOut"></div></div>'
-+'<h2>Kontrak aktif</h2>'+kk
-+agBlock;
++'<button type="button" class="btn" id="slkAiBtn" onclick="slkAI()">Minta pandangan lebih dalam</button><div id="slkAiOut"></div></div>';
 const sim=()=>{const b=n(($('slkNb').value||'').replace(/\D/g,'')),p=n(($('slkPg').value||'').replace(/\D/g,''));
 const a=d.lo+b,z=d.hi+b;
 let h='<div class="r"><span>Total setelah tambahan</span><b>'+rp(a)+' – '+rp(z)+'</b></div><div class="r"><span>Penghasilan minimal (40%)</span><b>'+rp(a/.4)+' – '+rp(z/.4)+'</b></div>';
@@ -3200,13 +3200,13 @@ window.slkAI=async function(){
   const d=CUR,out=$('slkAiOut'),btn=$('slkAiBtn');if(!d||!out)return;
   btn.disabled=true;
   try{
-    out.innerHTML='<p class="mu">\u23F3 AI sedang menyusun saran (bisa 10\u201330 detik)\u2026</p>';
+    out.innerHTML='<p class="mu">\u23F3 Sedang menyusun pandangan (bisa 10\u201330 detik)\u2026</p>';
     const j=await apiCall('analisa_ai',{ringkas:slkRingkas(d)});
-    if(!j||!j.ok){out.innerHTML='';notify(pesanAI(j&&j.error),false);return}
+    if(!j||!j.ok){out.innerHTML='';notify(String(pesanAI(j&&j.error)).replace(/analisa AI/gi,'pandangan').replace(/\bAI\b/g,'pandangan'),false);return}
     window._slkAiTeks=j.teks;
     out.innerHTML='<div class="ai-txt" style="margin:10px 0;padding:10px;background:#f6f9f8;border-radius:10px;font-size:13.5px">'+aiFmt(j.teks)+'</div>'
       +'<div class="slkbar"><button type="button" onclick="slkSalinAI()">\uD83D\uDCCB Salin</button></div>'
-      +'<div class="mu">Saran AI dari ringkasan angka SLIK, bukan keputusan kredit: verifikasi data dan putuskan sesuai kebijakan.'+(j.sisa!=null?' Sisa analisa hari ini: '+j.sisa+'.':'')+'</div>';
+      +'<div class="mu">Pandangan ini disusun dari ringkasan angka SLIK, bukan keputusan kredit: verifikasi data dan putuskan sesuai kebijakan.'+(j.sisa!=null?' Sisa analisa hari ini: '+j.sisa+'.':'')+'</div>';
   }catch(e){out.innerHTML='';notify('Gagal: '+e.message,false)}
   finally{btn.disabled=false}
 };
@@ -3218,7 +3218,7 @@ window.pgSlik=function(){
   const c=document.getElementById('content');
   if(!SES||SES.role!=='admin'){c.innerHTML='<div class="panel"><p class="mut">Menu ini hanya untuk Admin.</p></div>';return}
   c.innerHTML='<div class="panel"><div class="slk"><h3 style="margin-bottom:4px">\uD83D\uDD0D Baca SLIK</h3>'
-  +'<p class="mu">Khusus PEFINDO IdScore+. File dibaca di perangkat ini saja: tidak dikirim ke server, tidak disimpan, dan hilang saat pindah menu atau keluar. Fitur Saran AI bersifat opsional: hanya saat tombolnya ditekan, ringkasan angka (tanpa nama, NIK, nama lembaga, dan alamat) dikirim ke AI.</p>'
+  +'<p class="mu">Khusus PEFINDO IdScore+. File dibaca di perangkat ini saja: tidak dikirim ke server, tidak disimpan, dan hilang saat pindah menu atau keluar. Fitur Pandangan Lebih Dalam bersifat opsional: hanya saat tombolnya ditekan, ringkasan angka (tanpa nama, NIK, nama lembaga, dan alamat) dikirim untuk dianalisa.</p>'
   +'<label class="btn" id="slkUp">Pilih PDF laporan SLIK<input id="slkF" type="file" accept="application/pdf" hidden></label>'
   +'<div class="slkbar"><button type="button" onclick="slkClear()">Bersihkan layar</button></div>'
   +'<div id="slkSt" class="mu"></div><div id="slkOut"></div></div></div>';
