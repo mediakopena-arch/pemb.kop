@@ -218,8 +218,6 @@ nav a svg{flex:0 0 18px}
 .hm-top .hm-chip.up{background:#1f6fe0;color:#fff;border:1px solid rgba(255,255,255,.55);box-shadow:0 2px 8px rgba(15,70,160,.35)}
 /* ===== animasi diagram saat menu dibuka ===== */
 img,canvas,video{max-width:100%}
-.ai-txt{white-space:pre-wrap;line-height:1.55;overflow-wrap:anywhere}
-.ai-h{color:var(--pd);display:inline-block;margin-top:6px}
 #content{min-width:0;max-width:100%}
 .panel{max-width:100%;box-sizing:border-box}
 .vz-sweep{animation:vzSweep 1.15s cubic-bezier(.45,.05,.25,1) both}
@@ -983,7 +981,7 @@ function vzOutViz(r){
   const prod=Object.keys(pm).map(k=>({l:k,s:String(pk[k]||k),full:k,v:pm[k]})).sort((a,b)=>b.v-a.v).slice(0,6);
   return '<div class="jt-kpi"><div class="jt-k"><small>\uD83D\uDCCB Rekening</small><b>'+r.length.toLocaleString('id-ID')+'</b></div>'
    +'<div class="jt-k"><small>\uD83D\uDCB0 Outstanding</small><b>'+esc(rpS(tot))+'</b></div>'
-   +'<div class="jt-k"><small>\u26A0\uFE0F Tunggakan</small><b style="color:var(--red)">'+esc(rpS(tg))+'</b></div></div>'
+   +'<div class="jt-k"><small>\u26A0\uFE0F Tung. Basil</small><b style="color:var(--red)">'+esc(rpS(tg))+'</b></div></div>'
    +'<div class="jt-viz">'
    +'<div class="jt-v"><h4>\uD83E\uDD67 Kolektibilitas (OS)</h4>'+vzDonut(vzCollItems(r,true),rpS(tot),'outstanding')+'</div>'
    +'<div class="jt-v"><h4>\u2705 Status Angsuran</h4>'+vzDonut([{l:'Sudah',c:'#1c9a57',v:nS},{l:'Belum',c:'#c0392b',v:r.length-nS}],r.length?Math.round(nS/r.length*100)+'%':'-','sudah angsur')+'</div>'
@@ -997,13 +995,14 @@ function vzCallCat(d){
   if((lc.hasil||'').includes('tidak diangkat')||(lc.hasil||'').includes('salah'))return 4;
   return 1;
 }
-/* Bagi hasil masuk: produk 111 tidak dihitung; produk 551 (tempo) seluruh setoran = bagi hasil;
-   produk lain = margin yang masuk (kolom 12 export, tersimpan di masuk_pokok - lihat catatan rumus status angsur). */
+/* Bagi hasil masuk: produk 111 tidak dihitung (di laporan resmi dihitung manual);
+   semua produk lain (541, 543, 544, 551) = basil yang dibayar = kolom 12 export, tersimpan di masuk_pokok.
+   Terverifikasi dengan nota debet (541 Sugiyono: basil terbayar 420.000; 551 Tarsono: 60.000).
+   Kolom 11 (tag_margin) = POKOK yang dibayar, JANGAN dijumlahkan; kolom 13 = sisa pokok. */
 function bhOf(d){
   const k=String(d.kode||'');
   if(k==='111')return 0;
-  const m=d.masuk_pokok||0;
-  return k==='551'?m+(d.tag_margin||0):m;
+  return d.masuk_pokok||0;
 }
 function bhPanel(r){
   let tot=0,n=0;const pp={},pa={};
@@ -1020,7 +1019,7 @@ function bhPanel(r){
    +'<div class="card"><h4>Masuk hari ini</h4><div class="v">'+(dl==null?'-':rp(dl))+'</div><div class="s">'+(dl==null?'muncul setelah 2 kali upload data (data baru)':'selisih dari upload sebelumnya \u00B7 tgl data '+esc(fmtTgl(tg)))+'</div></div></div>'
    +'<div class="tbl-w" style="overflow-x:auto"><table><tr><th>Produk</th><th class="r">Rek.</th><th class="r">Bagi hasil</th></tr>'+row(pp)+'</table></div>'
    +'<div style="overflow-x:auto;margin-top:12px"><table><tr><th>AO</th><th class="r">Rek.</th><th class="r">Bagi hasil</th></tr>'+row(pa)+'</table></div>'
-   +'<p class="mut" style="margin-top:6px">Produk 111 tidak dihitung. Produk 551 (tempo): seluruh setoran dihitung bagi hasil.</p></div>';
+   +'<p class="mut" style="margin-top:6px">Produk 111 tidak dihitung (manual). Produk lain: basil yang dibayar (tanpa pokok).</p></div>';
 }
 function vzPinjViz(r){
   const nS=r.filter(d=>d.sudah_angsur).length;
@@ -1038,7 +1037,7 @@ function vzPinjViz(r){
   </div>
   <div class="cards">
     <div class="card"><h4>Total Outstanding</h4><div class="v">${rp(totO)}</div><div class="s">${r.length} rekening aktif</div></div>
-    <div class="card"><h4>Total Tunggakan (TAK Pokok)</h4><div class="v" style="color:var(--red)">${rp(totT)}</div><div class="s">dari ${nT} rekening menunggak</div></div>
+    <div class="card"><h4>Total Tunggakan Basil</h4><div class="v" style="color:var(--red)">${rp(totT)}</div><div class="s">dari ${nT} rekening menunggak</div></div>
   </div>
   <div class="jt-viz">
     <div class="jt-v"><h4>\uD83D\uDCCA Jumlah per Kolektibilitas</h4>${vzBars(vzCollItems(r,false),v=>v.toLocaleString('id-ID'))}</div>
@@ -1052,7 +1051,7 @@ function vzPinjViz(r){
   if(SES.role==='admin'&&myCabang()==='all'){
     const perCab={};r.forEach(d=>{const c=cabOf(d);(perCab[c]=perCab[c]||[]).push(d)});
     h+=`<div class="panel"><h3>\uD83C\uDFE2 Kendali Cabang <span class="mut">(klik baris cabang untuk membuka datanya)</span></h3><table>
-    <tr><th>Cabang</th><th class="r">Rekening</th><th class="r">\u2713 Sudah</th><th class="r">\u2717 Belum</th><th class="r">Total Outstanding</th><th class="r">Tunggakan</th></tr>
+    <tr><th>Cabang</th><th class="r">Rekening</th><th class="r">\u2713 Sudah</th><th class="r">\u2717 Belum</th><th class="r">Total Outstanding</th><th class="r">Tung. Basil</th></tr>
     ${Object.entries(perCab).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))).map(([c,list])=>{
       const sdh=list.filter(d=>d.sudah_angsur).length;
       return `<tr style="cursor:pointer" title="Klik untuk kelola data cabang ini" data-c="${esc(c)}" onclick="openCabFilter(this.dataset.c)"><td>\uD83C\uDFE2 <b>${esc(list[0].cabang_nama||('Cabang '+c))}</b> <span class="mut">(${esc(c)})</span></td><td class="num">${list.length}</td><td class="num" style="color:#1c7a43;font-weight:700">${sdh}</td><td class="num" style="color:var(--red);font-weight:700">${list.length-sdh}</td><td class="num">${rp(list.reduce((a,d)=>a+d.outstanding,0))}</td><td class="num" style="color:var(--red)">${rp(list.reduce((a,d)=>a+Math.max(0,d.tak_pokok),0))}</td></tr>`}).join('')}
@@ -1083,7 +1082,7 @@ function pgOut(){
         <option value="4">Diragukan</option><option value="5">Macet</option></select>
       <select id="oSort" onchange="renderOut()">
         <option value="out-desc">Outstanding \u2193</option><option value="out-asc">Outstanding \u2191</option>
-        <option value="tak-desc">Tunggakan \u2193</option><option value="bln-desc">Bln Tunggakan \u2193</option></select>
+        <option value="tak-desc">Tung. Basil \u2193</option><option value="bln-desc">Bln Tung. Basil \u2193</option></select>
       <select id="oStatus" onchange="renderOut()"><option value="">Semua Status</option>
         <option value="1">\u2713 Sudah angsur</option><option value="0">\u2717 Belum angsur</option></select>
       <button class="btn-a" onclick="exportCSV()">\u2B07\uFE0F Export CSV</button>
@@ -1114,13 +1113,13 @@ function renderOut(){
   const tot=r.reduce((s,d)=>s+d.outstanding,0),tott=r.reduce((s,d)=>s+(d.tak_pokok>0?d.tak_pokok:0),0);
   const nSdh=r.filter(d=>d.sudah_angsur).length;
   document.getElementById('outViz').innerHTML=vzOutViz(r);
-  document.getElementById('outList').innerHTML=`<p class="mut" style="margin-bottom:8px">${r.length} rekening \u00B7 <b style="color:#1c7a43">\u2713 ${nSdh} sudah angsur</b> \u00B7 <b style="color:var(--red)">\u2717 ${r.length-nSdh} belum</b> \u00B7 Total outstanding: <b>${rp(tot)}</b> \u00B7 Total tunggakan: <b style="color:var(--red)">${rp(tott)}</b></p>
+  document.getElementById('outList').innerHTML=`<p class="mut" style="margin-bottom:8px">${r.length} rekening \u00B7 <b style="color:#1c7a43">\u2713 ${nSdh} sudah angsur</b> \u00B7 <b style="color:var(--red)">\u2717 ${r.length-nSdh} belum</b> \u00B7 Total outstanding: <b>${rp(tot)}</b> \u00B7 Total tunggakan basil: <b style="color:var(--red)">${rp(tott)}</b> \u00B7 Basil masuk: <b style="color:#1c7a43">${rp(r.reduce((s,d)=>s+bhOf(d),0))}</b></p>
   <div class="tbl-w" style="overflow-x:auto"><table>
    <tr><th>No. Rekening</th><th>Nama</th><th>Produk</th><th>AO</th><th class="r">Plafond</th><th class="r">Outstanding</th>
-   <th class="r">Tunggakan Awal</th><th class="r">Tagihan Aktif</th><th class="r">Tunggakan Akhir</th><th class="r">Bln</th><th>Coll</th><th>Status</th><th>Tgl JT</th></tr>
+   <th class="r" title="Kolom 7 export: tunggakan basil awal">Tung. Basil Awal</th><th class="r" title="Kolom 10 export: tagihan basil bulan ini">Tagihan Basil</th><th class="r" title="Kolom 12 export: basil yang dibayar">Basil Masuk</th><th class="r" title="Kolom 14 export: sisa tunggakan basil">Tung. Basil Akhir</th><th class="r">Bln</th><th>Coll</th><th>Status</th><th>Tgl JT</th></tr>
    ${r.map(d=>`<tr><td>${esc(d.rekening)}</td><td>${esc(d.nama)}</td><td>${esc(d.kode)} \u2014 ${esc(d.produk)}</td><td>${esc(d.ao)}</td>
      <td class="num">${rp(d.plafond)}</td><td class="num"><b>${rp(d.outstanding)}</b></td>
-     <td class="num">${rp(d.ta_pokok)}</td><td class="num">${rp(d.tag_pokok)}</td>
+     <td class="num">${rp(d.ta_pokok)}</td><td class="num">${rp(d.tag_pokok)}</td><td class="num"><b>${rp(bhOf(d))}</b></td>
      <td class="num" style="color:${d.tak_pokok>0?'var(--red)':'inherit'}">${rp(d.tak_pokok)}</td>
      <td class="num">${d.tak_bln||0}</td>
      <td><span class="badge ${collClass(d.coll_val)}">${collLabel(d.coll_val)}</span></td>
@@ -1129,8 +1128,8 @@ function renderOut(){
 }
 function exportCSV(){
   const r=outFiltered();
-  let csv='\uFEFFRekening;Nama;Produk;AO;Plafond;Outstanding;TunggakanAhirPokok;Bln;Coll;TglJT\n';
-  r.forEach(d=>csv+=`${d.rekening};${d.nama};${d.produk};${d.ao};${d.plafond};${d.outstanding};${d.tak_pokok};${d.tak_bln};${collLabel(d.coll_val)};${d.tgl_jt}
+  let csv='\uFEFFRekening;Nama;Produk;AO;Plafond;Outstanding;TagihanBasil;BasilMasuk;TunggakanBasilAkhir;Bln;Coll;TglJT\n';
+  r.forEach(d=>csv+=`${d.rekening};${d.nama};${d.produk};${d.ao};${d.plafond};${d.outstanding};${d.tag_pokok};${bhOf(d)};${d.tak_pokok};${d.tak_bln};${collLabel(d.coll_val)};${d.tgl_jt}
 `);
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download='daftar_outstanding.csv';a.click();
@@ -1161,7 +1160,7 @@ function pinjShow(k){
   m.innerHTML='<div class="box" style="width:560px;max-height:82vh;overflow:auto;padding:16px">'
    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px"><h3 style="color:var(--p)">'+esc(lab)+' <span class="mut">('+list.length+')</span></h3>'
    +'<button class="btn-s" type="button" onclick="document.getElementById(\'mdlPinjList\').style.display=\'none\'">Tutup</button></div>'
-   +(list.length?list.map(d=>'<div class="pl-row"><div><b>'+esc(d.nama)+'</b><small>'+esc(d.rekening)+' \u00B7 '+esc(d.ao)+'</small></div><div style="text-align:right"><b>'+rp(d.outstanding)+'</b>'+(d.tak_pokok>0?'<small style="color:var(--red)">tunggak '+rp(d.tak_pokok)+'</small>':'')+'</div></div>').join(''):'<p class="mut">Tidak ada data</p>')
+   +(list.length?list.map(d=>'<div class="pl-row"><div><b>'+esc(d.nama)+'</b><small>'+esc(d.rekening)+' \u00B7 '+esc(d.ao)+'</small></div><div style="text-align:right"><b>'+rp(d.outstanding)+'</b>'+(d.tak_pokok>0?'<small style="color:var(--red)">tunggak basil '+rp(d.tak_pokok)+'</small>':'')+'</div></div>').join(''):'<p class="mut">Tidak ada data</p>')
    +'</div>';
   m.style.display='flex';
 }
@@ -1179,7 +1178,7 @@ function renderPinj(){
   document.getElementById('pinjViz').innerHTML=vzPinjViz(r);
   document.getElementById('pinjList').innerHTML=`<p class="mut" style="margin-bottom:8px">${r.length} rekening \u00B7 <b style="color:#1c7a43">\u2713 ${nSdh2} sudah angsur</b> \u00B7 <b style="color:var(--red)">\u2717 ${r.length-nSdh2} belum</b></p>
   <div class="tbl-w" style="overflow-x:auto"><table>
-   <tr><th>Rekening</th><th>Nama</th><th>Produk</th><th>AO</th><th class="r">Outstanding</th><th class="r">Tunggakan</th>
+   <tr><th>Rekening</th><th>Nama</th><th>Produk</th><th>AO</th><th class="r">Outstanding</th><th class="r">Tung. Basil</th>
    <th class="r">Bln</th><th>Coll</th><th>Status</th><th>Kondisi Call Terakhir</th><th>Tgl Call</th><th>Petugas</th></tr>
    ${r.map(d=>{const lc=lastCall(d.rekening);return `<tr>
      <td>${esc(d.rekening)}</td><td>${esc(d.nama)}</td><td>${esc(d.kode)}</td><td>${esc(d.ao)}</td>
@@ -1207,7 +1206,7 @@ function pgUp(){
     <label style="display:block;margin:6px 0"><input type="checkbox" id="upDl" checked> Unduh juga salinan file ke perangkat ini (arsip cadangan di luar aplikasi)</label>
     <p class="mut" style="margin-bottom:8px">Setiap upload otomatis diarsipkan dengan penanda <b>cabang + tanggal data</b>. Upload dengan cabang dan tanggal yang sama akan <b>ditanyakan dulu</b> sebelum menimpa arsip lama. Lihat di menu <b>Pengaturan Umum \u203A Arsip Upload</b>.</p>
     <div id="upMsg"></div>
-    <p class="mut" style="margin-top:14px">Kolom yang dibaca: No. Rekening, Nama, Plafond, Outstanding, Coll, Tunggakan Awal (Pokok/Margin/Bln), Tagihan Aktif (Pokok/Margin), Tagihan Masuk (Pokok/Margin), Tunggakan Akhir (Pokok/Bln), Tgl JT, Nama AO, serta grup produk (mis. 541 / PEMBIAYAAN MURABAHAH ANGSURAN).</p>
+    <p class="mut" style="margin-top:14px">Kolom yang dibaca: No. Rekening, Nama, Plafond, Outstanding, Coll, Tunggakan Awal (Pokok/Margin/Bln), Tagihan Aktif (Pokok/Margin), Tagihan Masuk (Pokok/Margin), Tunggakan Akhir (Pokok/Bln), Tgl JT, Nama AO, serta grup produk (mis. 541 / PEMBIAYAAN MURABAHAH ANGSURAN).</p><p class="mut" style="margin-top:6px"><b>Catatan arti kolom (terverifikasi dengan nota debet):</b> label kolom di export menyesatkan. Kolom 11 = <b>pokok</b> yang dibayar, kolom 12 = <b>basil</b> yang dibayar (dipakai sebagai Bagi Hasil Masuk), kolom 13 = sisa pokok, sedangkan kolom 7, 10, dan 14 = tunggakan awal, tagihan, dan tunggakan akhir <b>basil</b>. Produk 111 tidak dihitung dalam Bagi Hasil Masuk. Setoran yang tercatat bisa sampai tanggal cetak file, sehingga dapat berbeda dari laporan resmi bulanan.</p>
   </div>`;
 }
 function doUpload(){
@@ -1559,7 +1558,7 @@ function fmtDiff(a,b,badUp){
 function ringkasDiff(e){
   if(!e.diff)return '<span class="mut">Upload pertama untuk cabang ini \u2014 belum ada pembanding.</span>';
   const x=e.diff;
-  return `\u2191 Coll naik <b>${x.naik.n}</b> \u00B7 \u2193 Coll turun <b>${x.turun.n}</b> \u00B7 tunggakan bertambah <b>${x.tunggak.n}</b> \u00B7 keluar dari daftar (lunas/hapus) <b>${x.keluar.n}</b> \u00B7 rekening baru <b>${x.baru.n}</b>`;
+  return `\u2191 Coll naik <b>${x.naik.n}</b> \u00B7 \u2193 Coll turun <b>${x.turun.n}</b> \u00B7 tunggakan basil bertambah <b>${x.tunggak.n}</b> \u00B7 keluar dari daftar (lunas/hapus) <b>${x.keluar.n}</b> \u00B7 rekening baru <b>${x.baru.n}</b>`;
 }
 function tblDiff(title,rows,cols,fmt){
   if(!rows.length)return '';
@@ -1574,7 +1573,7 @@ function pgRw(){
     const rev=list.slice().reverse();
     const last=list[list.length-1];
     return `<div class="panel"><h3>\uD83C\uDFE2 ${esc(cb)} \u2014 ${esc(last.nama)}</h3>
-    <div class="tbl-w" style="overflow-x:auto"><table><tr><th>Tgl upload</th><th class="r">Rek.</th><th class="r">Outstanding</th><th class="r">Tunggakan</th>
+    <div class="tbl-w" style="overflow-x:auto"><table><tr><th>Tgl upload</th><th class="r">Rek.</th><th class="r">Outstanding</th><th class="r">Tung. Basil</th>
       <th class="r">Coll 1</th><th class="r">Coll 2</th><th class="r">Coll 3</th><th class="r">Coll 4</th><th class="r">Coll 5</th><th class="r">Sudah angsur</th></tr>
     ${rev.map((r,i)=>{const p=rev[i+1];const s=r.s,q=p&&p.s;
       return `<tr><td>${esc(r.tgl)}</td><td class="num">${s.n}${fmtDiff(s.n,q&&q.n,false)}</td>
@@ -1585,7 +1584,7 @@ function pgRw(){
     <h3 style="margin-top:14px">Perubahan pada upload terakhir (${esc(last.tgl)})</h3>
     <p style="margin:6px 0">${ringkasDiff(last)}</p>
     ${last.diff?tblDiff('Coll naik (memburuk)',last.diff.naik.rows,['Coll lama','Coll baru'],collLabel)
-      +tblDiff('Tunggakan bertambah',last.diff.tunggak.rows,['Lama','Baru'],rp)
+      +tblDiff('Tunggakan basil bertambah',last.diff.tunggak.rows,['Lama','Baru'],rp)
       +tblDiff('Coll turun (membaik)',last.diff.turun.rows,['Coll lama','Coll baru'],collLabel)
       +tblDiff('Keluar dari daftar (lunas/hapus)',last.diff.keluar.rows,['Coll terakhir','Outstanding terakhir'],v=>typeof v==='number'&&v<=5?collLabel(v):rp(v))
       +tblDiff('Rekening baru',last.diff.baru.rows,['Coll','Outstanding'],v=>typeof v==='number'&&v<=5?collLabel(v):rp(v)):''}
@@ -1647,7 +1646,7 @@ function pgAO(){
       <span class="mut">Petugas yang login hanya melihat data AO yang dikaitkan dengan akunnya.</span>
     </div>
     <div class="tbl-w" style="overflow-x:auto"><table>
-    <tr><th>Nama AO (di data)</th><th>Cabang</th><th class="r">Rekening</th><th class="r">\u2713 Sudah / \u2717 Belum</th><th class="r">Total Outstanding</th><th class="r">Tunggakan</th><th>Di-assign ke Akun</th></tr>
+    <tr><th>Nama AO (di data)</th><th>Cabang</th><th class="r">Rekening</th><th class="r">\u2713 Sudah / \u2717 Belum</th><th class="r">Total Outstanding</th><th class="r">Tung. Basil</th><th>Di-assign ke Akun</th></tr>
     ${aos.map(a=>{
       const rows=VIS.filter(d=>d.ao===a);
       const asg=AOMAP[a]||'';
@@ -1892,10 +1891,10 @@ function pgRpt(){
       <label style="display:block;margin:6px 0"><input type="checkbox" id="rLamp"> Sertakan lampiran daftar rekening</label>
       <div class="toolbar">
         <select id="rSort"><option value="nama">Lampiran urut: Nama</option><option value="rek">Lampiran urut: No. Rekening</option></select>
-        <button class="btn-a" onclick="cetakAnalisa()">\uD83D\uDD0D Cek data</button>
+        <button class="btn-a" onclick="cetakAnalisa()">\uD83D\uDDA8\uFE0F Cetak / Simpan PDF</button>
       </div>
-      <div class="toolbar"><button class="btn-a" id="aiBtn" onclick="analisaAI()">\uD83E\uDDED Pandangan Umum</button></div>
-      <p class="mut"><b>Pandangan Umum</b>: AI membaca seluruh laporan di atas dan memberi gambaran serta arah membaca kondisi AO / cabang. AI hanya menerima angka ringkasan (tanpa nama nasabah / no. rekening); hasilnya perlu diperiksa sebelum dipakai.</p>
+      <div class="toolbar"><button class="btn-a" id="aiBtn" onclick="analisaAI()">\uD83E\uDD16 Analisa AI</button></div>
+      <p class="mut">AI hanya menerima angka ringkasan (tanpa nama nasabah / no. rekening). Saran AI perlu diperiksa sebelum dipakai.</p>
       <div id="aiOut"></div>
       <p class="mut">Periode berlaku untuk pencairan dan kunjungan. Kondisi OS memakai data aktif terakhir.</p>
     </div>`:''}
@@ -1905,10 +1904,10 @@ function pgRpt(){
       <div class="toolbar" style="margin-top:8px">
         <select id="rColl"><option value="">Semua Coll</option>${[1,2,3,4,5].map(c=>`<option value="${c}">${collLabel(c)}</option>`).join('')}</select>
         <select id="rStatus"><option value="">Semua Status</option><option value="1">\u2713 Sudah angsur</option><option value="0">\u2717 Belum angsur</option></select>
-        <button class="btn-a" onclick="cetakColl()">\uD83D\uDD0D Cek data</button>
+        <button class="btn-a" onclick="cetakColl()">\uD83D\uDDA8\uFE0F Cetak / Simpan PDF</button>
       </div>
     </div>
-    <p class="mut">\uD83D\uDCA1 Tombol Cek data membuka tampilan siap cetak \u2014 di HP pilih <b>"Simpan sebagai PDF"</b> untuk jadi file lampiran.</p>
+    <p class="mut">\uD83D\uDCA1 Tombol Cetak membuka dialog print \u2014 di HP pilih <b>"Simpan sebagai PDF"</b> untuk jadi file lampiran.</p>
   </div>`;
 }
 function printInit(title,sub){
@@ -1997,7 +1996,7 @@ function blokBanding(B,primary,perAO){
   <table><tr><th>Indikator</th><th>${esc(lbl)}</th><th>Sekarang</th><th>Selisih</th></tr>
   ${row('Jumlah rekening',a.n,c.n,v=>v.toLocaleString('id-ID'),dN(a.n,c.n))}
   ${row('Outstanding',a.os,c.os,rp,dRp(a.os,c.os)+' ('+(a.os?(c.os>=a.os?'+':'\u2212')+pc(Math.abs(c.os-a.os),a.os):'-')+')')}
-  ${row('Tunggakan pokok',a.tg,c.tg,rp,dRp(a.tg,c.tg))}
+  ${row('Tunggakan basil',a.tg,c.tg,rp,dRp(a.tg,c.tg))}
   ${row('Sudah angsur',a.sd,c.sd,v=>v+' rek.',dN(a.sd,c.sd)+' \u00B7 '+dPc(pct1(a.sd,a.n),pct1(c.sd,c.n)))}
   ${nplA!=null?row('OS Coll 3\u20135 (% dari OS)',nplA,nplC,v=>pc(v,v===nplA?a.os:c.os),dPc(pct1(nplA,a.os),pct1(nplC,c.os))):''}
   ${[1,2,3,4,5].map(k=>a.c[k].n==null?'':row('Rekening '+collLabel(k),a.c[k].n,c.c[k].n,v=>v,dN(a.c[k].n,c.c[k].n))).join('')}
@@ -2005,16 +2004,16 @@ function blokBanding(B,primary,perAO){
   /* per AO (dari ringkasan upload \u2014 selalu tersedia) */
   if(perAO.length>1){
     const bs=n=>{const s={n:0,out:0,tung:0,sudah:0};B.ents.forEach(e=>{const x=e.s.ao[n];if(x){s.n+=x.n;s.out+=x.out;s.tung+=x.tung;s.sudah+=x.sudah}});return s};
-    h+=`<table style="margin-top:6px"><tr><th>AO</th><th>OS lalu \u2192 kini</th><th>\u0394 OS</th><th>Tunggakan lalu \u2192 kini</th><th>\u0394 Tunggakan</th><th>% angsur lalu \u2192 kini</th></tr>
+    h+=`<table style="margin-top:6px"><tr><th>AO</th><th>OS lalu \u2192 kini</th><th>\u0394 OS</th><th>Tung. Basil lalu \u2192 kini</th><th>\u0394 Tung. Basil</th><th>% angsur lalu \u2192 kini</th></tr>
     ${perAO.map(x=>{const b=bs(x.a);return `<tr><td>${esc(x.a)}</td><td class="num">${rpS(b.out)} \u2192 ${rpS(x.os)}</td><td class="num">${dRp(b.out,x.os)}</td><td class="num">${rpS(b.tung)} \u2192 ${rpS(x.tg)}</td><td class="num">${dRp(b.tung,x.tg)}</td><td class="num">${pc(b.sudah,b.n)} \u2192 ${pc(x.sd,x.n)}</td></tr>`}).join('')}</table>`;
   }
   if(!B.df){h+='<p><i>Rincian per nasabah untuk tanggal ini belum tersedia (arsip upload tanggal tersebut belum ada di perangkat ini).</i></p>';return h}
   const d=B.df,lim=primary?15:8;
-  h+=`<p style="margin:6px 0">Perubahan nasabah: Coll memburuk <b>${d.naik.length}</b> \u00B7 Coll membaik <b>${d.turun.length}</b> \u00B7 tunggakan bertambah <b>${d.tunggak.length}</b> \u00B7 keluar dari daftar (lunas) <b>${d.keluar.length}</b> \u00B7 rekening baru <b>${d.baru.length}</b></p>`;
+  h+=`<p style="margin:6px 0">Perubahan nasabah: Coll memburuk <b>${d.naik.length}</b> \u00B7 Coll membaik <b>${d.turun.length}</b> \u00B7 tunggakan basil bertambah <b>${d.tunggak.length}</b> \u00B7 keluar dari daftar (lunas) <b>${d.keluar.length}</b> \u00B7 rekening baru <b>${d.baru.length}</b></p>`;
   const tb=(jd,rows,kolom,fmt,n)=>rows.length?`<p style="margin:6px 0 2px"><b>${jd}</b> (${rows.length}${rows.length>n?', ditampilkan '+n:''})</p><table><tr><th>No. Rekening</th><th>Nama</th><th>AO</th><th>${kolom[0]}</th><th>${kolom[1]}</th></tr>
     ${rows.slice(0,n).map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td class="num">${fmt(r[3])}</td><td class="num">${fmt(r[4])}</td></tr>`).join('')}</table>`:'';
   h+=tb('Coll memburuk',d.naik.slice().sort((x,y)=>(y[4]-y[3])-(x[4]-x[3])),['Coll lama','Coll baru'],collLabel,lim)
-    +tb('Tunggakan bertambah (terbesar)',d.tunggak.slice().sort((x,y)=>(y[4]-y[3])-(x[4]-x[3])),['Tunggakan lama','Tunggakan baru'],rp,lim)
+    +tb('Tunggakan basil bertambah (terbesar)',d.tunggak.slice().sort((x,y)=>(y[4]-y[3])-(x[4]-x[3])),['Tung. basil lama','Tung. basil baru'],rp,lim)
     +tb('Coll membaik',d.turun,['Coll lama','Coll baru'],collLabel,lim);
   h+=`<p style="margin:8px 0 2px"><b>Keluar dari daftar (lunas / dihapus dari data)</b> (${d.keluar.length} \u00B7 OS terakhir ${rp(d.keluar.reduce((s,r)=>s+r[4],0))})</p>`;
   h+=d.keluar.length?`<table><tr><th>No</th><th>No. Rekening</th><th>Nama</th><th>AO</th><th>Coll terakhir</th><th>OS terakhir</th></tr>
@@ -2023,7 +2022,6 @@ function blokBanding(B,primary,perAO){
   return h;
 }
 /* ===== Analisa AI: hanya ANGKA RINGKASAN yang dikirim (tanpa nama nasabah / no. rekening) ===== */
-const PANDANGAN_INSTRUKSI='Kamu analis pembiayaan senior untuk koperasi. Tulis PANDANGAN UMUM berbahasa Indonesia untuk pimpinan dari angka ringkasan ini. Tugasmu memberi gambaran dan ARAH MEMBACA kondisi AO dan cabang, bukan sekadar mengulang angka. Pakai judul bagian HURUF KAPITAL berikut: GAMBARAN UMUM (2-4 kalimat: kondisi keseluruhan baik / waspada / kritis beserta alasan utamanya); KONDISI PER CABANG (hanya bila ada lebih dari satu cabang); KONDISI PER AO (sebut AO yang paling kuat dan yang paling perlu perhatian beserta angka pendukung: rasio OS Coll 3-5 terhadap OS, persen sudah angsur, cakupan kunjungan, tunggakan, prioritas belum dikunjungi, rekening lunas, bagi hasil masuk; bandingkan memakai rasio karena ukuran portofolio berbeda); PERGERAKAN (dibanding pembanding: OS, tunggakan, Coll memburuk/membaik); KEGIATAN LAPANGAN (kunjungan, janji bayar, sudah membayar, pencairan, dan kaitannya dengan hasil angsur); YANG PERLU DIWASPADAI (temuan atau keanehan data); ARAH TINDAK LANJUT (3-6 langkah konkret berurutan prioritas, sebut AO/cabang yang dituju); PERTANYAAN UNTUK DICEK (hal yang tidak bisa disimpulkan dari angka). Jika lingkup hanya satu AO, fokuskan pada kondisi AO itu dan arah pembinaannya. Aturan: hanya gunakan angka yang diberikan, jangan mengarang; sebut bila data pembanding tidak ada; jangan menyebut nama nasabah; rekening yang hilang dari data bisa lunas atau dihapus, jangan dipastikan, dan bedakan lunas_os0 dari rekening keluar dari data; tulis teks biasa tanpa markdown (tanpa tanda ** atau #), poin memakai tanda -; maksimal sekitar 450 kata.';
 async function ringkasAI(){
   const ao=document.getElementById('rAO')?.value||'';
   const mode=(document.getElementById('rBanding')||{}).value||'both';
@@ -2041,7 +2039,7 @@ async function ringkasAI(){
   const uniq=new Set(lap.map(l=>l.rekening));
   const prio=d=>(collOf(d)>=2||tung(d)>0)&&!d.sudah_angsur&&!uniq.has(d.rekening);
   const tot=sum(rows,d=>d.outstanding),tg=sum(rows,tung),sudah=rows.filter(d=>d.sudah_angsur).length;
-  const byC=[1,2,3,4,5].map(c=>{const g=rows.filter(d=>collOf(d)===c);return{coll:c+' '+collLabel(c),rekening:g.length,os:sum(g,d=>d.outstanding),tunggakan_pokok:sum(g,tung)}});
+  const byC=[1,2,3,4,5].map(c=>{const g=rows.filter(d=>collOf(d)===c);return{coll:c+' '+collLabel(c),rekening:g.length,os:sum(g,d=>d.outstanding),tunggakan_basil:sum(g,tung)}});
   const npl=sum(byC.slice(2),x=>x.os);
   /* pembanding (sama seperti cetak analisa) */
   const names=ao?[ao]:(SES.role==='admin'?null:[...aoSet]);
@@ -2057,29 +2055,27 @@ async function ringkasAI(){
     }
   }catch(e){}
   const banding=bands.map(B=>{const a=B.st,c=curSt;return{pembanding:(B.mode==='bulan'?'awal bulan ':'upload sebelumnya ')+B.tgl.map(fmtTgl).join('/'),
-    os_sebelum:a.os,os_sekarang:c.os,tunggakan_sebelum:a.tg,tunggakan_sekarang:c.tg,
+    os_sebelum:a.os,os_sekarang:c.os,tunggakan_basil_sebelum:a.tg,tunggakan_basil_sekarang:c.tg,
     sudah_angsur_sebelum:a.sd+' dari '+a.n,sudah_angsur_sekarang:c.sd+' dari '+c.n,
-    coll_memburuk:B.df?B.df.naik.length:null,coll_membaik:B.df?B.df.turun.length:null,rekening_keluar_dari_data_lunas_atau_dihapus:B.df?B.df.keluar.length:null}});
+    coll_memburuk:B.df?B.df.naik.length:null,coll_membaik:B.df?B.df.turun.length:null,rekening_keluar_lunas:B.df?B.df.keluar.length:null}});
   const pen=penFor(ao);
   const janji=lap.filter(l=>l.hasil==='Janji bayar'),bayar=lap.filter(l=>l.hasil==='Sudah membayar'),tjk=lap.filter(l=>TAK_JANGKAU.includes(l.hasil));
   const pr=rows.filter(prio);
   const grp=(keyFn,arr)=>{const m={};arr.forEach(d=>{const k=keyFn(d);(m[k]=m[k]||[]).push(d)});return m};
-  const isLunas=d=>String(d.kode||'')!=='111'&&(d.outstanding||0)<=0;
-  const lunasR=rows.filter(isLunas);
   const perCab=Object.entries(grp(cabOf,rows)).map(([k,g])=>({cabang:k+((CABANGS.find(c=>c.kode===k)||{}).nama?' '+CABANGS.find(c=>c.kode===k).nama:''),rekening:g.length,os:sum(g,d=>d.outstanding),
-    tunggakan_pokok:sum(g,tung),os_coll3_5:sum(g.filter(d=>collOf(d)>=3),d=>d.outstanding),sudah_angsur:g.filter(d=>d.sudah_angsur).length,prioritas_belum_dikunjungi:g.filter(prio).length,lunas_os0:g.filter(isLunas).length,bagi_hasil_masuk:sum(g,bhOf)}));
+    tunggakan_basil:sum(g,tung),os_coll3_5:sum(g.filter(d=>collOf(d)>=3),d=>d.outstanding),sudah_angsur:g.filter(d=>d.sudah_angsur).length,prioritas_belum_dikunjungi:g.filter(prio).length}));
   const AOL=aoLapOf(rows);
   const perAO=[...aoSet].sort().map(a=>{const g=rows.filter(d=>d.ao===a),lp=lap.filter(l=>AOL(l)===a),u=new Set(lp.map(l=>l.rekening)),pe=penFor(a),p2=g.filter(prio);
-    return{ao:a,cabang:cabOf(g[0]),rekening:g.length,os:sum(g,d=>d.outstanding),tunggakan_pokok:sum(g,tung),os_coll3_5:sum(g.filter(d=>collOf(d)>=3),d=>d.outstanding),
+    return{ao:a,cabang:cabOf(g[0]),rekening:g.length,os:sum(g,d=>d.outstanding),tunggakan_basil:sum(g,tung),os_coll3_5:sum(g.filter(d=>collOf(d)>=3),d=>d.outstanding),
       sudah_angsur:g.filter(d=>d.sudah_angsur).length,call:lp.length,nasabah_dikunjungi:u.size,pencairan_rek:pe.length,pencairan_nominal:sum(pe,r=>r.nominal),
-      prioritas_belum_dikunjungi:p2.length,prioritas_tunggakan:sum(p2,tung),lunas_os0:g.filter(isLunas).length,bagi_hasil_masuk:sum(g,bhOf)}}).sort((x,y)=>y.os-x.os);
+      prioritas_belum_dikunjungi:p2.length,prioritas_tunggakan_basil:sum(p2,tung)}}).sort((x,y)=>y.os-x.os);
   const MAXAO=40;
-  const data={_instruksi:PANDANGAN_INSTRUKSI,lingkup:ao?('AO '+ao):(scopeAll?'Semua AO (seluruh data yang terlihat)':'Data Anda'),periode:{dari,sampai},
-    total:{rekening:rows.length,os:tot,tunggakan_pokok:tg,os_bermasalah_coll3_5:npl,rasio_bermasalah_pct:pct(npl,tot),sudah_angsur:sudah,belum_angsur:rows.length-sudah},
-    per_coll:byC,lunas_os0:{rekening:lunasR.length,total_plafond:sum(lunasR,d=>d.plafond||0)},bagi_hasil_masuk:{total:sum(rows,bhOf),rekening_sudah_angsur:rows.filter(d=>bhOf(d)>0).length},perbandingan:banding,
+  const data={lingkup:ao?('AO '+ao):(scopeAll?'Semua AO (seluruh data yang terlihat)':'Data Anda'),periode:{dari,sampai},
+    total:{rekening:rows.length,os:tot,tunggakan_basil:tg,os_bermasalah_coll3_5:npl,rasio_bermasalah_pct:pct(npl,tot),sudah_angsur:sudah,belum_angsur:rows.length-sudah},
+    per_coll:byC,perbandingan:banding,
     pencairan:{rekening:pen.length,nominal:sum(pen,r=>r.nominal)},
     kunjungan:{catatan:lap.length,nasabah_unik:uniq.size,cakupan_pct:pct(uniq.size,rows.length),janji_bayar:janji.length,sudah_membayar:bayar.length,tidak_terjangkau:tjk.length},
-    nasabah_prioritas_belum_dikunjungi:{rekening:pr.length,tunggakan_pokok:sum(pr,tung)},
+    nasabah_prioritas_belum_dikunjungi:{rekening:pr.length,tunggakan_basil:sum(pr,tung)},
     per_cabang:perCab,per_ao:perAO.slice(0,MAXAO)};
   if(perAO.length>MAXAO)data.catatan_data='Hanya '+MAXAO+' AO dengan OS terbesar yang disertakan dari total '+perAO.length+' AO.';
   return {data};
@@ -2089,39 +2085,24 @@ function pesanAI(e){
     ai_sibuk:'Layanan AI sedang penuh / batas gratis tercapai. Coba lagi beberapa menit lagi.',ai_galat:'Layanan AI gagal merespons. Coba lagi nanti.',
     ai_kosong:'AI tidak memberi jawaban. Coba lagi.',terlalu_besar:'Ringkasan terlalu besar. Pilih satu AO atau persempit data.',dilarang:'Fitur ini hanya untuk Admin.'})[e]||String(e||'Gagal');
 }
-/* format teks AI: judul HURUF KAPITAL & **tebal** -> tebal, bullet rapi (aman: semua teks di-escape dulu) */
-function aiFmt(t){
-  return String(t||'').split('\n').map(function(l){
-    var tr=l.trim(),e=esc(l).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^\s*#{1,4}\s*(.+)$/,'<b>$1</b>').replace(/^(\s*)[*-]\s+/,'$1\u2022 ');
-    if(tr&&tr.length<=60&&/[A-Z]{3}/.test(tr)&&/^[A-Z0-9 ,&\/().'\u2013-]+:?$/.test(tr))e='<b class="ai-h">'+e+'</b>';
-    return e}).join('\n');
-}
 async function analisaAI(){
   const out=document.getElementById('aiOut'),btn=document.getElementById('aiBtn');
   if(!out)return;
   if(btn)btn.disabled=true;
   try{
-    out.innerHTML='<p class="mut">\u23F3 Menyiapkan ringkasan laporan\u2026</p>';
+    out.innerHTML='<p class="mut">\u23F3 Menyiapkan ringkasan angka\u2026</p>';
     const R=await ringkasAI();
     if(R.err){out.innerHTML='';notify(R.err,false);return}
-    out.innerHTML='<p class="mut">\u23F3 AI sedang menyusun pandangan umum (bisa 10\u201330 detik)\u2026</p>';
+    out.innerHTML='<p class="mut">\u23F3 AI sedang menganalisa (bisa 10\u201330 detik)\u2026</p>';
     const j=await apiCall('analisa_ai',{ringkas:R.data});
     if(!j||!j.ok){out.innerHTML='';notify(pesanAI(j&&j.error),false);return}
-    window._aiTeks=j.teks;window._aiMeta={lingkup:R.data.lingkup,dari:R.data.periode.dari,sampai:R.data.periode.sampai};
-    out.innerHTML='<div class="panel" style="background:#fff;margin-top:8px"><h3 style="margin-bottom:2px">\uD83E\uDDED Pandangan Umum</h3>'
-      +'<p class="mut" style="margin:0 0 8px">'+esc(R.data.lingkup)+' \u00B7 Periode '+esc(fmtTgl(R.data.periode.dari))+' s/d '+esc(fmtTgl(R.data.periode.sampai))+'</p>'
-      +'<div class="ai-txt">'+aiFmt(j.teks)+'</div>'
-      +'<div class="toolbar" style="margin-top:10px"><button class="btn-a" onclick="salinAI()">\uD83D\uDCCB Salin</button><button class="btn-a" onclick="cetakPandangan()">\uD83D\uDDA8\uFE0F Cetak / Simpan PDF</button></div>'
-      +'<p class="mut">Dibuat AI dari angka ringkasan (tanpa nama nasabah); periksa sebelum bertindak.'+(j.sisa!=null?' Sisa pandangan hari ini: '+j.sisa+'.':'')+'</p></div>';
+    window._aiTeks=j.teks;
+    out.innerHTML='<div class="panel" style="background:#fff;margin-top:8px"><h3 style="margin-bottom:6px">\uD83E\uDD16 Analisa AI</h3>'
+      +'<div style="white-space:pre-wrap;line-height:1.55">'+esc(j.teks)+'</div>'
+      +'<div class="toolbar" style="margin-top:8px"><button class="btn-a" onclick="salinAI()">\uD83D\uDCCB Salin</button></div>'
+      +'<p class="mut">Dibuat AI dari angka ringkasan; periksa sebelum bertindak.'+(j.sisa!=null?' Sisa analisa hari ini: '+j.sisa+'.':'')+'</p></div>';
   }catch(e){out.innerHTML='';notify('Gagal: '+e.message,false)}
   finally{if(btn)btn.disabled=false}
-}
-function cetakPandangan(){
-  const t=window._aiTeks;if(!t){notify('Belum ada pandangan untuk dicetak',false);return}
-  const m=window._aiMeta||{},tgl=new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
-  printInit('Pandangan Umum \u2014 Kopena','Dicetak '+tgl+' \u00B7 '+(m.lingkup||'')+(m.dari?' \u00B7 Periode '+fmtTgl(m.dari)+' s/d '+fmtTgl(m.sampai):''));
-  document.getElementById('printArea').innerHTML+='<div style="white-space:pre-wrap;line-height:1.55;font-size:10.5pt">'+aiFmt(t)+'</div><p style="font-size:8.5pt;color:#555;margin-top:10px">Dibuat AI dari angka ringkasan (tanpa nama nasabah); perlu diperiksa sebelum dipakai.</p>';
-  window.print();
 }
 function salinAI(){
   const t=window._aiTeks||'';
@@ -2177,11 +2158,11 @@ async function cetakAnalisa(){
   /* analisis otomatis */
   const A=[];
   A.push(`Rasio OS bermasalah (Coll 3\u20135) <b>${pc(npl,tot)}</b> dari total OS (${rp(npl)} dari ${rp(tot)}).`);
-  A.push(`<b>${sudah}</b> dari ${rows.length} rekening (${pc(sudah,rows.length)}) sudah angsur; <b>${rows.length-sudah}</b> belum, dengan total tunggakan pokok ${rp(tg)}.`);
+  A.push(`<b>${sudah}</b> dari ${rows.length} rekening (${pc(sudah,rows.length)}) sudah angsur; <b>${rows.length-sudah}</b> belum, dengan total tunggakan basil ${rp(tg)}.`);
   A.push(`Rekening lunas (OS 0 pada data aktif): <b>${lunasNow.length}</b> rekening dengan total plafond ${rp(plafLunas)}${lunas.length?`; ditambah ${lunas.length} rekening yang keluar dari data dibanding pembanding (OS terakhir ${rp(osLunas)}).`:'.'}`);
-  A.push(`Total bagi hasil masuk <b>${rp(bhTot)}</b> dari <b>${bhN}</b> rekening yang sudah angsur (produk 111 tidak dihitung; produk 551 seluruh setoran dihitung bagi hasil).`);
+  A.push(`Total bagi hasil masuk <b>${rp(bhTot)}</b> dari <b>${bhN}</b> rekening yang sudah angsur (produk 111 tidak dihitung; hanya basil yang dibayar, tanpa pokok).`);
   bands.forEach(B=>{const a=B.st,c=curSt;
-    A.push(`Dibanding data ${B.tgl.map(fmtTgl).join('/')}${B.mode==='bulan'?' (awal bulan)':''}: OS ${c.os>=a.os?'naik':'turun'} ${rp(Math.abs(c.os-a.os))}, tunggakan ${c.tg>=a.tg?'naik':'turun'} ${rp(Math.abs(c.tg-a.tg))}, rekening sudah angsur ${pc(a.sd,a.n)} \u2192 ${pc(c.sd,c.n)}${B.df?`; ${B.df.naik.length} rekening Coll memburuk, ${B.df.turun.length} membaik, ${B.df.keluar.length} keluar dari data (lunas/dihapus), ${B.df.baru.length} baru`:''}.`)});
+    A.push(`Dibanding data ${B.tgl.map(fmtTgl).join('/')}${B.mode==='bulan'?' (awal bulan)':''}: OS ${c.os>=a.os?'naik':'turun'} ${rp(Math.abs(c.os-a.os))}, tunggakan basil ${c.tg>=a.tg?'naik':'turun'} ${rp(Math.abs(c.tg-a.tg))}, rekening sudah angsur ${pc(a.sd,a.n)} \u2192 ${pc(c.sd,c.n)}${B.df?`; ${B.df.naik.length} rekening Coll memburuk, ${B.df.turun.length} membaik, ${B.df.keluar.length} keluar dari data (lunas/dihapus), ${B.df.baru.length} baru`:''}.`)});
   A.push(pen.length?`Pencairan periode ini: <b>${pen.length}</b> rekening senilai <b>${rp(penTot)}</b>${lunas.length?`; dibanding OS rekening yang keluar dari data (${rp(osLunas)}), selisih indikatif ${penTot>=osLunas?'+':'\u2212'}${rp(Math.abs(penTot-osLunas))}`:''}.`:'Belum ada pencairan tercatat pada periode ini.');
   A.push(lap.length?`Kunjungan/call periode ini: <b>${lap.length}</b> catatan pada <b>${uniq.size}</b> nasabah \u2014 cakupan <b>${pc(uniq.size,rows.length)}</b> dari seluruh rekening. Janji bayar ${janji.length} (${rp(sum(janji,l=>l.nominal||0))}), sudah membayar ${bayar.length} (${rp(sum(bayar,l=>l.nominal||0))}), tidak terjangkau ${tjk.length}.`:'Belum ada laporan kunjungan/call pada periode ini.');
   if(bayar.length){const bs=new Set(bayar.map(l=>l.rekening));const ok=rows.filter(d=>bs.has(d.rekening)&&d.sudah_angsur).length;A.push(`Cocokkan laporan harian dengan data: dari <b>${bs.size}</b> nasabah yang dilaporkan "Sudah membayar", <b>${ok}</b> sudah tercatat angsur di data aktif${bs.size-ok>0?` (${bs.size-ok} belum tercatat \u2014 data bank mungkin belum diperbarui)`:''}.`)}
@@ -2195,17 +2176,17 @@ async function cetakAnalisa(){
   const tgl=new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
   printInit('Analisa Kondisi OS \u2014 Kopena',`Dicetak ${tgl} \u00B7 ${ao?'AO: '+ao:'Semua AO'} \u00B7 Periode ${fmtTgl(dari)} s/d ${fmtTgl(sampai)} \u00B7 ${rows.length} rekening`);
   const kpi=(l,v)=>`<div class="kpi">${l}<b>${v}</b></div>`;
-  let h=`<div class="kpis">${kpi('Total OS',rp(tot))}${kpi('Tunggakan pokok',rp(tg))}${kpi('Sudah angsur',pc(sudah,rows.length))}${kpi('OS Coll 3\u20135',pc(npl,tot))}${kpi('Rekening lunas',lunasNow.length)}${kpi('Bagi hasil masuk',rp(bhTot))}</div>
+  let h=`<div class="kpis">${kpi('Total OS',rp(tot))}${kpi('Tunggakan basil',rp(tg))}${kpi('Sudah angsur',pc(sudah,rows.length))}${kpi('OS Coll 3\u20135',pc(npl,tot))}${kpi('Rekening lunas',lunasNow.length)}${kpi('Bagi hasil masuk',rp(bhTot))}</div>
    <h2>Ringkasan Analisa</h2><ul style="margin:4px 0 8px 16px;font-size:9.5pt;line-height:1.5">${A.map(x=>`<li>${x}</li>`).join('')}</ul>`;
-  h+=`<h2>1. Kondisi Outstanding per Kolektibilitas</h2><table><tr><th>Kolektibilitas</th><th>Rekening</th><th>Total OS</th><th>% OS</th><th>Tunggakan</th></tr>
+  h+=`<h2>1. Kondisi Outstanding per Kolektibilitas</h2><table><tr><th>Kolektibilitas</th><th>Rekening</th><th>Total OS</th><th>% OS</th><th>Tung. Basil</th></tr>
    ${byC.map(x=>`<tr><td>${collLabel(x.c)}</td><td class="num">${x.n}</td><td class="num">${rp(x.os)}</td><td class="num">${pc(x.os,tot)}</td><td class="num">${rp(x.tg)}</td></tr>`).join('')}
    <tr><td><b>Total</b></td><td class="num"><b>${rows.length}</b></td><td class="num"><b>${rp(tot)}</b></td><td class="num">100%</td><td class="num"><b>${rp(tg)}</b></td></tr></table>
    ${svgBars(byC.map(x=>({l:collLabel(x.c)+' ('+x.n+')',v:x.os,c:COLL_WARNA[x.c-1]})),rpS)}`;
-  h+=`<h2>2. Perkembangan per Upload</h2>`+(trend.length>=1?`${svgTrend(trend.map(t=>t.t),[{n:'Outstanding',c:'#2f6f5e',v:trend.map(t=>t.o)},{n:'Tunggakan',c:'#b3261e',v:trend.map(t=>t.g)}])}
-   <table><tr><th>Tanggal data</th><th>Rekening</th><th>Outstanding</th><th>Tunggakan</th></tr>${trend.map(t=>`<tr><td>${fmtTgl(t.t)}</td><td class="num">${t.n}</td><td class="num">${rp(t.o)}</td><td class="num">${rp(t.g)}</td></tr>`).join('')}</table>`
+  h+=`<h2>2. Perkembangan per Upload</h2>`+(trend.length>=1?`${svgTrend(trend.map(t=>t.t),[{n:'Outstanding',c:'#2f6f5e',v:trend.map(t=>t.o)},{n:'Tunggakan basil',c:'#b3261e',v:trend.map(t=>t.g)}])}
+   <table><tr><th>Tanggal data</th><th>Rekening</th><th>Outstanding</th><th>Tung. Basil</th></tr>${trend.map(t=>`<tr><td>${fmtTgl(t.t)}</td><td class="num">${t.n}</td><td class="num">${rp(t.o)}</td><td class="num">${rp(t.g)}</td></tr>`).join('')}</table>`
    :'<p>Riwayat upload belum tersedia di perangkat ini (riwayat tercatat di perangkat admin yang mengupload data).</p>');
   h+=`<h2>3. Perbandingan & Perubahan Nasabah</h2>`+(bands.length?bands.map((B,i)=>blokBanding(B,i===0,perAO)).join(''):'<p>Belum ada data pembanding \u2014 dibutuhkan minimal dua kali upload untuk cabang ini di perangkat admin (riwayat tercatat otomatis saat upload).</p>');
-  h+=`<h2>4. Kinerja ${ao?'AO '+esc(ao):'per AO'}</h2><table><tr><th>AO</th><th>Rek.</th><th>OS</th><th>Tunggakan</th><th>% Sudah angsur</th><th>Call</th><th>Nasabah dikunjungi</th><th>Cakupan</th><th>Pencairan</th><th>Lunas</th><th>Bagi hasil</th></tr>
+  h+=`<h2>4. Kinerja ${ao?'AO '+esc(ao):'per AO'}</h2><table><tr><th>AO</th><th>Rek.</th><th>OS</th><th>Tung. Basil</th><th>% Sudah angsur</th><th>Call</th><th>Nasabah dikunjungi</th><th>Cakupan</th><th>Pencairan</th><th>Lunas</th><th>Bagi hasil</th></tr>
    ${perAO.map(x=>`<tr><td>${esc(x.a)}</td><td class="num">${x.n}</td><td class="num">${rp(x.os)}</td><td class="num">${rp(x.tg)}</td><td class="num">${pc(x.sd,x.n)}</td><td class="num">${x.call}</td><td class="num">${x.u}</td><td class="num">${pc(x.u,x.n)}</td><td class="num">${x.pn} \u00B7 ${rp(x.pt)}</td><td class="num">${x.ln}</td><td class="num">${rp(x.bh)}</td></tr>`).join('')}</table>
    ${perAO.length>1?`<p style="margin:6px 0 2px"><b>% rekening sudah angsur per AO</b></p>${svgBars(perAO.map(x=>({l:x.a,v:pct1(x.sd,x.n)})),v=>String(v).replace('.',',')+'%','#2f6f5e')}
    <p style="margin:6px 0 2px"><b>Cakupan kunjungan per AO (% rekening dikunjungi)</b></p>${svgBars(perAO.map(x=>({l:x.a,v:pct1(x.u,x.n)})),v=>String(v).replace('.',',')+'%','#3b6ea5')}`
@@ -2221,7 +2202,7 @@ async function cetakAnalisa(){
    <table><tr><th>Hasil call</th><th>Jumlah</th><th>Nominal dilaporkan</th></tr>${hk.map(k=>`<tr><td>${esc(k)}</td><td class="num">${hasil[k]}</td><td class="num">${rp(sum(lap.filter(l=>l.hasil===k),l=>l.nominal||0))}</td></tr>`).join('')}</table>
    ${tjk.length?`<p style="margin-top:6px"><b>Perlu verifikasi data kontak/alamat (${new Set(tjk.map(l=>l.rekening)).size} nasabah):</b> ${[...new Set(tjk.map(l=>l.nama))].slice(0,15).map(esc).join(', ')}${new Set(tjk.map(l=>l.nama)).size>15?', \u2026':''}</p>`:''}`
    :'<p>Belum ada laporan kunjungan pada periode ini.</p>');
-  h+=`<h3 style="font-size:10pt;margin:10px 0 3px">Prioritas tindak lanjut \u2014 belum dikunjungi pada periode ini</h3>`+(prior.length?`<table><tr><th>No</th><th>No. Rekening</th><th>Nama</th><th>AO</th><th>Coll</th><th>Tunggakan</th><th>Outstanding</th></tr>
+  h+=`<h3 style="font-size:10pt;margin:10px 0 3px">Prioritas tindak lanjut \u2014 belum dikunjungi pada periode ini</h3>`+(prior.length?`<table><tr><th>No</th><th>No. Rekening</th><th>Nama</th><th>AO</th><th>Coll</th><th>Tung. Basil</th><th>Outstanding</th></tr>
    ${prior.map((d,i)=>`<tr><td>${i+1}</td><td>${esc(d.rekening)}</td><td>${esc(d.nama)}</td><td>${esc(d.ao)}</td><td>${collLabel(d.coll_val)}</td><td class="num">${rp(tung(d))}</td><td class="num">${rp(d.outstanding)}</td></tr>`).join('')}</table>`:'<p>Tidak ada.</p>');
   h+=`<h2>7. Rekening Lunas & Bagi Hasil Masuk</h2><p>Rekening lunas (OS 0): <b>${lunasNow.length}</b> \u00B7 total plafond ${rp(plafLunas)} \u00B7 Bagi hasil masuk: <b>${rp(bhTot)}</b> dari ${bhN} rekening.</p>
    <table><tr><th>Produk</th><th>Rek. angsur</th><th>Bagi hasil</th></tr>${Object.keys(bhProd).sort((a,b)=>bhProd[b].v-bhProd[a].v).map(k=>`<tr><td>${esc(k)}</td><td class="num">${bhProd[k].n}</td><td class="num">${rp(bhProd[k].v)}</td></tr>`).join('')||'<tr><td colspan="3">Belum ada bagi hasil masuk</td></tr>'}</table>`
@@ -2231,7 +2212,7 @@ async function cetakAnalisa(){
     const sort=document.getElementById('rSort').value;
     const lr=rows.slice().sort((a,b)=>sort==='rek'?String(a.rekening).localeCompare(String(b.rekening)):a.nama.localeCompare(b.nama));
     h+=`<h2 style="break-before:page">Lampiran \u2014 Daftar Rekening (${lr.length})</h2><table>
-     <tr><th>No</th><th>No. Rekening</th><th>Nama Nasabah</th><th>Produk</th><th>Coll</th><th>Status Angsur</th><th>Angsuran/bln</th><th>Outstanding</th></tr>
+     <tr><th>No</th><th>No. Rekening</th><th>Nama Nasabah</th><th>Produk</th><th>Coll</th><th>Status Angsur</th><th>Tagihan Basil/bln</th><th>Outstanding</th></tr>
      ${lr.map((d,i)=>`<tr><td>${i+1}</td><td>${esc(d.rekening)}</td><td>${esc(d.nama)}</td><td>${esc(d.kode)} ${esc(d.produk)}</td><td>${collLabel(d.coll_val)}</td><td>${d.sudah_angsur?'Sudah':'Belum'}</td><td class="num">${rp(d.tag_pokok)}</td><td class="num">${rp(d.outstanding)}</td></tr>`).join('')}
      <tr><td colspan="7" style="text-align:right"><b>TOTAL OUTSTANDING</b></td><td class="num"><b>${rp(tot)}</b></td></tr></table>`;
   }
@@ -2245,13 +2226,13 @@ function cetakColl(){
   const rows=myData().filter(d=>(!f||clamp(d)==f)&&(!st||(d.sudah_angsur?1:0)==st));
   const tgl=new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
   printInit('Laporan Kolektibilitas (Coll) \u2014 Kopena',`Dicetak ${tgl} \u00B7 ${rows.length} rekening`);
-  let h=`<table><tr><th>Kolektibilitas</th><th>Jumlah</th><th>Total Outstanding</th><th>Total Tunggakan</th></tr>`;
+  let h=`<table><tr><th>Kolektibilitas</th><th>Jumlah</th><th>Total Outstanding</th><th>Total Tung. Basil</th></tr>`;
   [1,2,3,4,5].forEach(c=>{const g=rows.filter(d=>clamp(d)===c);
     h+=`<tr><td>${collLabel(c)}</td><td>${g.length}</td><td class="num">${rp(g.reduce((s,d)=>s+d.outstanding,0))}</td><td class="num">${rp(g.reduce((s,d)=>s+Math.max(0,d.tak_pokok),0))}</td></tr>`});
   h+=`</table>`;
   [1,2,3,4,5].forEach(c=>{const g=rows.filter(d=>clamp(d)===c);if(!g.length)return;
     h+=`<h2>${collLabel(c)} (${g.length})</h2><table>
-     <tr><th>No</th><th>No. Rekening</th><th>Nama</th><th>AO</th><th>Status</th><th>Outstanding</th><th>Tunggakan</th></tr>
+     <tr><th>No</th><th>No. Rekening</th><th>Nama</th><th>AO</th><th>Status</th><th>Outstanding</th><th>Tung. Basil</th></tr>
      ${g.sort((a,b)=>b.outstanding-a.outstanding).map((d,i)=>`<tr><td>${i+1}</td><td>${esc(d.rekening)}</td><td>${esc(d.nama)}</td><td>${esc(d.ao)}</td><td>${d.sudah_angsur?'Sudah':'Belum'}</td><td class="num">${rp(d.outstanding)}</td><td class="num">${rp(Math.max(0,d.tak_pokok))}</td></tr>`).join('')}
     </table>`});
   document.getElementById('printArea').innerHTML+=h;
@@ -2527,10 +2508,12 @@ function pgJt(){
       <select id="jtMode" onchange="renderJt()"><option value="bulan">Bulan terpilih</option><option value="lewat">Sudah lewat</option></select>
       ${adm&&cabs.length>1?`<select id="jtCab" onchange="renderJt()"><option value="">Semua cabang</option>${cabs.map(c=>`<option value="${esc(c)}">${esc(cbName(c))}</option>`).join('')}</select>`:''}
       ${adm?`<select id="jtAO" onchange="renderJt()"><option value="">Semua AO</option>${aos.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select>`:''}
+      ${adm?`<button class="btn-a" id="jtAiBtn" onclick="jtAnalisaAI()">\uD83E\uDD16 Analisa AI</button>`:''}
       <button class="btn-s" onclick="jtCSV()">\u2B07\uFE0F CSV</button>
       <button class="btn-s" onclick="jtCetak()">\uD83D\uDDA8\uFE0F Cetak</button>
     </div>
     <div id="jtLun"></div>
+    <div id="jtAiOut"></div>
     <div id="jtList"></div>
   </div>`;
   renderJt();
@@ -2549,11 +2532,11 @@ function jtCSV(){
 function jtCetak(){
   const r=jtRows(),g=jtGroups(r.rows),now=new Date();
   printInit('Daftar Pinjaman Jatuh Tempo','Cabang: '+jtCabLabel()+' \u00B7 Periode: '+jtPeriode(r)+' \u00B7 Dicetak: '+now.toLocaleDateString('id-ID')+' '+now.toLocaleTimeString('id-ID'));
-  document.getElementById('printArea').innerHTML+=jtTableHtml(g)+jtLunPrintHtml(window._jtLun);
+  document.getElementById('printArea').innerHTML+=jtAiPrintHtml()+jtTableHtml(g)+jtLunPrintHtml(window._jtLun);
   window.print();
 }
 
-/* ===== PELUNASAN BULAN TERPILIH: dibanding data awal bulan (tanggal 1) ===== */
+/* ===== PELUNASAN BULAN TERPILIH: dibanding data awal bulan (tanggal 1) + Analisa AI ===== */
 let JT_LUN_SEQ=0;
 function jtInScope(d){
   if(!SES)return true;
@@ -2625,11 +2608,74 @@ function jtLunPrintHtml(R){
 async function jtRenderLunas(){
   const box=document.getElementById('jtLun');if(!box)return;
   const seq=++JT_LUN_SEQ;
-  box.innerHTML='';  /* tampilan "Pelunasan bulan ini" disembunyikan (sudah ada di menu lain); data tetap dihitung untuk cetak */
+  box.innerHTML='';  /* tampilan "Pelunasan bulan ini" disembunyikan (sudah ada di menu lain); data tetap dihitung untuk Analisa AI & cetak */
   let R;try{R=await jtHitungLunas()}catch(e){return}
   if(seq!==JT_LUN_SEQ)return;
   window._jtLun=R;
 }
+function jtAiRingkas(R){
+  const r=jtRows(),rows=r.rows,sum=(a,f)=>a.reduce((s,x)=>s+f(x),0),tung=d=>Math.max(0,d.tak_pokok||0);
+  const grp=(arr,kf)=>{const m={};arr.forEach(x=>{const k=kf(x);(m[k]=m[k]||[]).push(x)});return m};
+  const ym=parseInt(r.bln.slice(0,4),10)*12+parseInt(r.bln.slice(5,7),10)-1;
+  const belum=rows.filter(d=>(d.outstanding||0)>0);
+  const jt={pinjaman:rows.length,os:sum(rows,d=>d.outstanding),plafond:sum(rows,d=>d.plafond),sudah_nol_os:rows.length-belum.length,masih_ada_os:belum.length,
+    os_masih_ada:sum(belum,d=>d.outstanding),tunggakan_basil:sum(rows,tung),sudah_angsur:rows.filter(d=>d.sudah_angsur).length,
+    per_produk:Object.entries(grp(rows,d=>d.kode+' '+d.produk)).map(([k,g])=>({produk:k,pinjaman:g.length,os:sum(g,d=>d.outstanding),plafond:sum(g,d=>d.plafond)})),
+    per_coll:[1,2,3,4,5].map(c=>{const g=belum.filter(d=>collOf(d)===c);return{coll:c+' '+collLabel(c),pinjaman:g.length,os:sum(g,d=>d.outstanding)}}),
+    per_ao:Object.entries(grp(rows,d=>d.ao)).map(([k,g])=>({ao:k,pinjaman:g.length,os:sum(g,d=>d.outstanding),masih_ada_os:g.filter(d=>(d.outstanding||0)>0).length,os_coll3_5:sum(g.filter(d=>collOf(d)>=3),d=>d.outstanding)})).sort((a,b)=>b.os-a.os).slice(0,30)};
+  if(r.mode==='bulan')jt.per_minggu=[1,2,3,4,5].map(w=>{const g=rows.filter(d=>{const t=jtParse(d.tgl_jt);return t&&Math.min(5,Math.ceil(t.d/7))===w});return{minggu_ke:w,pinjaman:g.length,os:sum(g,d=>d.outstanding)}});
+  let pel=null,banding=null;
+  if(R&&R.oldAll.length){
+    const kls=x=>{const t=jtParse(x.tgl_jt);if(!t)return 'tidak_diketahui';const k=t.y*12+t.m-1;return k===ym?'jatuh_tempo_bulan_ini':k>ym?'dilunasi_sebelum_jatuh_tempo':'dilunasi_setelah_lewat_jatuh_tempo'};
+    pel={rekening:R.lunas.length,nilai_os_saat_awal_bulan:R.osLunas,
+      menurut_jatuh_tempo:Object.entries(grp(R.lunas,kls)).map(([k,g])=>({kategori:k,rekening:g.length,os:sum(g,x=>x.os)})),
+      per_produk:jtLunProduk(R).map(p=>({produk:p.k,rekening:p.n,os:p.os})),
+      per_coll_sebelumnya:[1,2,3,4,5].map(c=>{const g=R.lunas.filter(x=>x.coll===c);return{coll:c+' '+collLabel(c),rekening:g.length,os:sum(g,x=>x.os)}}),
+      per_ao:Object.entries(grp(R.lunas,x=>x.ao)).map(([k,g])=>({ao:k,rekening:g.length,os:sum(g,x=>x.os)})).sort((a,b)=>b.os-a.os).slice(0,30),
+      hilang_dari_data:R.lunas.filter(x=>x.hilang).length,os_nol_di_data:R.lunas.filter(x=>!x.hilang).length};
+    const sA=statRows(R.oldAll),sK=statRows(R.newAll),np=s=>s.c[3].os+s.c[4].os+s.c[5].os;
+    banding={data_awal_bulan:R.tglAwal,data_akhir:R.tglAkhir,os_awal:sA.os,os_kini:sK.os,rekening_awal:sA.n,rekening_kini:sK.n,
+      tunggakan_basil_awal:sA.tg,tunggakan_basil_kini:sK.tg,sudah_angsur_awal:sA.sd,sudah_angsur_kini:sK.sd,os_coll3_5_awal:np(sA),os_coll3_5_kini:np(sK),
+      rekening_baru_sejak_awal_bulan:R.baru.length,os_rekening_baru:sum(R.baru,d=>d.outstanding)};
+  }
+  return {_instruksi:'Kamu analis kredit/pembiayaan. Buat LAPORAN berbahasa Indonesia untuk pimpinan dari angka ini. Kamu bebas memilih pembanding dan sudut analisa (antar produk, AO, kolektibilitas, minggu, awal bulan vs kini, pelunasan vs jatuh tempo, dll). Sertakan: ringkasan utama, pelunasan bulan ini, jatuh tempo (yang belum lunas dan risikonya), perbandingan dengan awal bulan, temuan menarik/anomali, dan rekomendasi tindakan konkret. Gunakan hanya angka yang diberikan, jangan mengarang; sebut bila data pembanding tidak ada. Catatan: rekening yang hilang dari data bisa lunas atau dihapus buku, jangan dipastikan.',
+    bulan:r.bln,mode:r.mode==='lewat'?'sudah lewat jatuh tempo':'jatuh tempo bulan terpilih',lingkup:(jtVal('jtAO')?'AO '+jtVal('jtAO'):'Semua AO yang terlihat')+' \u00B7 '+jtCabLabel(),
+    jatuh_tempo:jt,pelunasan:pel,perbandingan_awal_bulan:banding,catatan_data:(R&&R.tanpa.length)?'Cabang tanpa data awal bulan: '+R.tanpa.join(', '):undefined};
+}
+async function jtAnalisaAI(){
+  const out=document.getElementById('jtAiOut'),btn=document.getElementById('jtAiBtn');if(!out)return;
+  if(btn)btn.disabled=true;
+  try{
+    out.innerHTML='<p class="mut">\u23F3 Menyiapkan ringkasan angka\u2026</p>';
+    const R=await jtHitungLunas();window._jtLun=R;
+    const data=jtAiRingkas(R);
+    if(!data.jatuh_tempo.pinjaman&&!data.pelunasan){out.innerHTML='';notify('Tidak ada data untuk dianalisa pada pilihan ini',false);return}
+    out.innerHTML='<p class="mut">\u23F3 AI sedang menganalisa (bisa 10\u201330 detik)\u2026</p>';
+    const j=await apiCall('analisa_ai',{ringkas:data});
+    if(!j||!j.ok){out.innerHTML='';notify(pesanAI(j&&j.error),false);return}
+    window._jtAiTeks=j.teks;window._jtAiBln=R.bln;
+    out.innerHTML='<div class="panel" style="background:#fff;margin-top:8px"><h3 style="margin-bottom:6px">\uD83E\uDD16 Laporan Analisa AI \u2014 '+esc(jtPeriode({bln:R.bln,mode:jtVal('jtMode')||'bulan'}))+'</h3>'
+      +'<div style="white-space:pre-wrap;line-height:1.55">'+esc(j.teks)+'</div>'
+      +'<div class="toolbar" style="margin-top:8px"><button class="btn-a" onclick="jtSalinAI()">\uD83D\uDCCB Salin</button><button class="btn-a" onclick="jtCetakAI()">\uD83D\uDDA8\uFE0F Cetak / PDF</button></div>'
+      +'<p class="mut">Dibuat AI dari angka ringkasan (tanpa nama nasabah); periksa sebelum bertindak.'+(j.sisa!=null?' Sisa analisa hari ini: '+j.sisa+'.':'')+'</p></div>';
+  }catch(e){out.innerHTML='';notify('Gagal: '+e.message,false)}
+  finally{if(btn)btn.disabled=false}
+}
+function jtSalinAI(){
+  const t=window._jtAiTeks||'';
+  if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>notify('Teks disalin'),()=>notify('Gagal menyalin',false));
+  else notify('Browser tidak mendukung salin otomatis',false);
+}
+function jtAiPrintHtml(){
+  return (window._jtAiTeks&&window._jtAiBln===(jtVal('jtBln')||todayISO().slice(0,7)))?'<h2>Analisa AI</h2><div style="white-space:pre-wrap;line-height:1.5;font-size:10pt">'+esc(window._jtAiTeks)+'</div>':'';
+}
+function jtCetakAI(){
+  const r=jtRows(),now=new Date();
+  printInit('Laporan Analisa AI \u2014 Jatuh Tempo & Pelunasan','Cabang: '+jtCabLabel()+' \u00B7 Periode: '+jtPeriode(r)+' \u00B7 Dicetak: '+now.toLocaleDateString('id-ID')+' '+now.toLocaleTimeString('id-ID'));
+  document.getElementById('printArea').innerHTML+=jtAiPrintHtml()+jtLunPrintHtml(window._jtLun);
+  window.print();
+}
+
 /* ================= BERANDA: MENU IKON 3D ================= */
 function hiG(id,a,b){return '<linearGradient id="'+id+'" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="'+a+'"/><stop offset="1" stop-color="'+b+'"/></linearGradient>'}
 function hiSvg(defs,body){return '<svg viewBox="0 0 64 64" aria-hidden="true"><defs>'+defs+'</defs>'+body+'</svg>'}
@@ -3096,9 +3142,7 @@ function renderAgunan(a,i){
   +'</div>';
 }
 
-let CUR=null;
 function render(d){
-CUR=d;window._slkAiTeks='';
 const F=[],bad=d.k.filter(c=>c.bad),tgs=d.k.filter(c=>c.tg>0),hi=d.k.filter(c=>c.hiRate&&!c.bad);
 if(d.ex)F.push(['yl','Skor tidak dapat dihitung: data 24 bulan terakhir tidak cukup. Angka 9999/XX bukan skor tinggi.']);
 else if(d.skor&&d.skor<=400)F.push(['rd','Skor '+d.skor+' ('+d.kat+'), DPD 90+ '+(d.dpd||'-')+'%']);
@@ -3153,13 +3197,7 @@ $('slkOut').innerHTML='<div class="v" style="background:'+v[1]+'">'+v[0]+'<small
 +'<div class="c"><h2>Kalender</h2><div class="sc"><table><tr><th></th>'+BL.map(x=>'<th>'+x.slice(0,3)+'</th>').join('')+'</tr>'+cal+'</table></div></div>'
 +'<div class="c"><h2>Simulasi tambahan</h2><label class="mu">Angsuran baru (Rp)</label><input id="slkNb" inputmode="numeric" placeholder="1375000"><label class="mu">Penghasilan/bulan (Rp)</label><input id="slkPg" inputmode="numeric" placeholder="5000000"><div id="slkSim"></div></div>'
 +'<h2>Kontrak aktif</h2>'+kk
-+agBlock
-+'<div class="c"><h2>\uD83D\uDD0E Pandangan Lebih Dalam</h2><div class="mu">Opsional. Hanya saat tombol ditekan, ringkasan angka (tanpa nama, NIK, nama lembaga, dan alamat) dikirim untuk disusun menjadi saran dan masukan atas kondisi debitur yang sedang mengajukan.</div>'
-+'<label class="mu">Plafon diajukan (Rp)</label><input id="slkAiP" inputmode="numeric" placeholder="25000000">'
-+'<label class="mu">Tenor (bulan)</label><input id="slkAiT" inputmode="numeric" placeholder="24">'
-+'<label class="mu">Tujuan / usaha (opsional, jangan tulis nama)</label><input id="slkAiK" maxlength="120" placeholder="mis. modal warung sembako">'
-+'<div class="mu">Angsuran baru &amp; penghasilan diambil dari kolom Simulasi di atas bila diisi.</div>'
-+'<button type="button" class="btn" id="slkAiBtn" onclick="slkAI()">Minta pandangan lebih dalam</button><div id="slkAiOut"></div></div>';
++agBlock;
 const sim=()=>{const b=n(($('slkNb').value||'').replace(/\D/g,'')),p=n(($('slkPg').value||'').replace(/\D/g,''));
 const a=d.lo+b,z=d.hi+b;
 let h='<div class="r"><span>Total setelah tambahan</span><b>'+rp(a)+' – '+rp(z)+'</b></div><div class="r"><span>Penghasilan minimal (40%)</span><b>'+rp(a/.4)+' – '+rp(z/.4)+'</b></div>';
@@ -3168,57 +3206,12 @@ h+='<div class="r"><span>DTI</span><b class="'+cl+'">'+Math.round(r1)+'% – '+M
 h+='<div class="note">'+(r1>40?'<span class="rd">Beban melebihi batas wajar 40%.</span>':r1>30?'<span class="yl">Mendekati batas wajar.</span>':'<span class="gn">Masih dalam batas wajar.</span>')+'</div>'}
 $('slkSim').innerHTML=h};$('slkNb').oninput=$('slkPg').oninput=sim;sim()}
 
-const SLK_INSTRUKSI='Kamu analis pembiayaan senior (koperasi/BPR). Berikut RINGKASAN SLIK/PEFINDO IdScore+ seorang calon debitur yang SEDANG MENGAJUKAN pembiayaan (identitas sengaja dihilangkan). Beri saran dan masukan berbahasa Indonesia untuk petugas dan komite. Pakai judul bagian HURUF KAPITAL berikut: KESIMPULAN SEMENTARA (pilih salah satu: layak / layak dengan syarat / ditunda atau sebaiknya ditolak, beserta alasan inti 2-3 kalimat; tegaskan ini pertimbangan, bukan keputusan final); KONDISI KEWAJIBAN SAAT INI (kontrak aktif, tunggakan, kontrak macet, bunga tinggi atau flat, riwayat keterlambatan dari kalender); KEMAMPUAN BAYAR (estimasi cicilan berjalan, rasio terhadap penghasilan dengan batas wajar 40% bila penghasilan diisi, bila tidak sebut penghasilan minimal yang dibutuhkan); AGUNAN (agunan aktif dan kecukupannya terhadap plafon diajukan bila ada); RISIKO DAN HAL YANG HARUS DIVERIFIKASI; SARAN STRUKTUR PEMBIAYAAN (plafon, tenor, angsuran maksimal yang wajar, syarat tambahan seperti pelunasan kewajiban lain, agunan tambahan, atau penjamin); LANGKAH BERIKUTNYA (dokumen dan pengecekan lapangan). Aturan: hanya gunakan angka yang diberikan, jangan mengarang; skor 9999/XX berarti skor tidak dapat dihitung, bukan skor tinggi; sebut bila data tidak tersedia; jangan menebak identitas; tulis teks biasa tanpa markdown (tanpa tanda ** atau #), poin memakai tanda -; maksimal sekitar 400 kata.';
-function slkRingkas(d){
-  const val=id=>n((($(id)||{}).value||'').replace(/\D/g,''));
-  const P=val('slkAiP'),T=val('slkAiT'),NB=val('slkNb'),PG=val('slkPg');
-  const bln=[];Object.keys(d.cal).sort().forEach(y=>d.cal[y].forEach(x=>{if(x)bln.push(x)}));
-  const l24=bln.slice(-24),l12=bln.slice(-12);
-  const lh=dt(d.lahir),umur=lh?Math.floor((Date.now()-lh.getTime())/31557600000):null;
-  const lo=d.lo+NB,hi=d.hi+NB;
-  const r={_instruksi:SLK_INSTRUKSI,
-    debitur:{umur_tahun:umur,pekerjaan:String(d.kerja||'').replace(/\s*\(.*\)\s*$/,'')||null},
-    skor:{nilai:d.ex?null:d.skor,kategori:d.ex?null:d.kat,dpd90_plus_pct:d.dpd||null,tidak_dapat_dihitung:!!d.ex,faktor_risiko:d.faktor||null},
-    ringkasan:{kontrak_aktif:+d.aktif||0,kontrak_ditutup:+d.tutup||0,total_plafon:d.plafon,total_sisa_utang:d.saldo,total_tunggakan:d.tg,sisa_utang_macet:d.sisaBad,
-      kolektibilitas_terburuk:+d.klw||null,hari_tunggakan_terburuk:+d.hrw||0,
-      estimasi_cicilan_berjalan:d.k.some(c=>c.A)?{min:Math.round(d.lo),maks:Math.round(d.hi)}:null},
-    kalender_24_bulan:{bulan_terbaca:l24.length,bulan_kol_2_ke_atas:l24.filter(x=>x[0]>=2).length,bulan_kol_3_ke_atas:l24.filter(x=>x[0]>=3).length,
-      kol_terburuk_12_bulan:l12.length?Math.max.apply(null,l12.map(x=>x[0])):null,hari_tunggakan_maks_24_bulan:l24.length?Math.max.apply(null,l24.map(x=>x[1])):null,
-      urutan_kol_terbaru_ke_lama:Object.keys(d.cal).sort().reverse().slice(0,2).map(y=>y+': '+d.cal[y].map(x=>x?x[0]:'-').join(' '))},
-    kontrak_aktif:d.k.slice(0,25).map((c,i)=>({no:i+1,jenis_kredit:c.tipe||null,status:c.st||null,macet_atau_hapus_buku:!!c.bad,plafon:c.plafon,sisa_utang:c.saldo,tunggakan:c.tg,hari_tunggakan:c.hari,
-      kolektibilitas:c.kol,kol_terburuk:c.klw,hari_tunggakan_terburuk:c.hrw,bunga_pct_per_tahun:c.bunga,skema:c.mode,mulai:c.mulai||null,jatuh_tempo:c.jt||null,
-      estimasi_cicilan:c.A?{min:Math.round(c.A[0]),maks:Math.round(c.A[1])}:null})),
-    agunan_aktif:d.agunanList.filter(a=>a._aktif).slice(0,10).map(a=>({tipe:a.tipe||null,nilai_pelapor:a.nilai||null,njop:a.njop||null,asuransi:a.asuransi||null,jenis_ikatan:a.jenisIkat||null,tgl_pengikatan:a.tglIkat||null})),
-    total_agunan_aktif:d.totalAgunan||0,
-    pengajuan:{plafon_diajukan:P||null,tenor_bulan:T||null,angsuran_baru:NB||null,penghasilan_bulanan:PG||null,
-      keterangan:(($('slkAiK')||{}).value||'').trim().slice(0,120)||null,
-      cicilan_total_setelah_pengajuan:(d.k.some(c=>c.A)||NB)?{min:Math.round(lo),maks:Math.round(hi)}:null,
-      dti_pct:PG?{min:Math.round(lo/PG*100),maks:Math.round(hi/PG*100)}:null}};
-  return r;
-}
-window.slkAI=async function(){
-  const d=CUR,out=$('slkAiOut'),btn=$('slkAiBtn');if(!d||!out)return;
-  btn.disabled=true;
-  try{
-    out.innerHTML='<p class="mu">\u23F3 Sedang menyusun pandangan (bisa 10\u201330 detik)\u2026</p>';
-    const j=await apiCall('analisa_ai',{ringkas:slkRingkas(d)});
-    if(!j||!j.ok){out.innerHTML='';notify(String(pesanAI(j&&j.error)).replace(/analisa AI/gi,'pandangan').replace(/\bAI\b/g,'pandangan'),false);return}
-    window._slkAiTeks=j.teks;
-    out.innerHTML='<div class="ai-txt" style="margin:10px 0;padding:10px;background:#f6f9f8;border-radius:10px;font-size:13.5px">'+aiFmt(j.teks)+'</div>'
-      +'<div class="slkbar"><button type="button" onclick="slkSalinAI()">\uD83D\uDCCB Salin</button></div>'
-      +'<div class="mu">Pandangan ini disusun dari ringkasan angka SLIK, bukan keputusan kredit: verifikasi data dan putuskan sesuai kebijakan.'+(j.sisa!=null?' Sisa analisa hari ini: '+j.sisa+'.':'')+'</div>';
-  }catch(e){out.innerHTML='';notify('Gagal: '+e.message,false)}
-  finally{btn.disabled=false}
-};
-window.slkSalinAI=function(){const t=window._slkAiTeks||'';
-  if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>notify('Teks disalin'),()=>notify('Gagal menyalin',false));
-  else notify('Browser tidak mendukung salin otomatis',false)};
-window.slkClear=function(){CUR=null;window._slkAiTeks='';const o=document.getElementById('slkOut'),s=document.getElementById('slkSt'),f=document.getElementById('slkF');if(o)o.innerHTML='';if(s)s.textContent='';if(f)f.value=''};
+window.slkClear=function(){const o=document.getElementById('slkOut'),s=document.getElementById('slkSt'),f=document.getElementById('slkF');if(o)o.innerHTML='';if(s)s.textContent='';if(f)f.value=''};
 window.pgSlik=function(){
   const c=document.getElementById('content');
   if(!SES||SES.role!=='admin'){c.innerHTML='<div class="panel"><p class="mut">Menu ini hanya untuk Admin.</p></div>';return}
   c.innerHTML='<div class="panel"><div class="slk"><h3 style="margin-bottom:4px">\uD83D\uDD0D Baca SLIK</h3>'
-  +'<p class="mu">Khusus PEFINDO IdScore+. File dibaca di perangkat ini saja: tidak dikirim ke server, tidak disimpan, dan hilang saat pindah menu atau keluar. Fitur Pandangan Lebih Dalam bersifat opsional: hanya saat tombolnya ditekan, ringkasan angka (tanpa nama, NIK, nama lembaga, dan alamat) dikirim untuk dianalisa.</p>'
+  +'<p class="mu">Khusus PEFINDO IdScore+. File dibaca di perangkat ini saja: tidak dikirim ke server, tidak disimpan, dan hilang saat pindah menu atau keluar.</p>'
   +'<label class="btn" id="slkUp">Pilih PDF laporan SLIK<input id="slkF" type="file" accept="application/pdf" hidden></label>'
   +'<div class="slkbar"><button type="button" onclick="slkClear()">Bersihkan layar</button></div>'
   +'<div id="slkSt" class="mu"></div><div id="slkOut"></div></div></div>';
