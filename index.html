@@ -1891,9 +1891,9 @@ function pgRpt(){
       <label style="display:block;margin:6px 0"><input type="checkbox" id="rLamp"> Sertakan lampiran daftar rekening</label>
       <div class="toolbar">
         <select id="rSort"><option value="nama">Lampiran urut: Nama</option><option value="rek">Lampiran urut: No. Rekening</option></select>
-        <button class="btn-a" onclick="cetakAnalisa()">\uD83D\uDDA8\uFE0F Cetak / Simpan PDF</button>
+        <button class="btn-a" onclick="cetakAnalisa()">\uD83D\uDDA8\uFE0F Temukan Hasil</button>
       </div>
-      <div class="toolbar"><button class="btn-a" id="aiBtn" onclick="analisaAI()">\uD83E\uDD16 Analisa AI</button></div>
+      <div class="toolbar"><button class="btn-a" id="aiBtn" onclick="analisaAI()">\uD83E\uDD16 Pandangan Umum</button></div>
       <p class="mut">AI hanya menerima angka ringkasan (tanpa nama nasabah / no. rekening). Saran AI perlu diperiksa sebelum dipakai.</p>
       <div id="aiOut"></div>
       <p class="mut">Periode berlaku untuk pencairan dan kunjungan. Kondisi OS memakai data aktif terakhir.</p>
@@ -2097,7 +2097,7 @@ async function analisaAI(){
     const j=await apiCall('analisa_ai',{ringkas:R.data});
     if(!j||!j.ok){out.innerHTML='';notify(pesanAI(j&&j.error),false);return}
     window._aiTeks=j.teks;
-    out.innerHTML='<div class="panel" style="background:#fff;margin-top:8px"><h3 style="margin-bottom:6px">\uD83E\uDD16 Analisa AI</h3>'
+    out.innerHTML='<div class="panel" style="background:#fff;margin-top:8px"><h3 style="margin-bottom:6px">\uD83E\uDD16 Pandangan Umum</h3>'
       +'<div style="white-space:pre-wrap;line-height:1.55">'+esc(j.teks)+'</div>'
       +'<div class="toolbar" style="margin-top:8px"><button class="btn-a" onclick="salinAI()">\uD83D\uDCCB Salin</button></div>'
       +'<p class="mut">Dibuat AI dari angka ringkasan; periksa sebelum bertindak.'+(j.sisa!=null?' Sisa analisa hari ini: '+j.sisa+'.':'')+'</p></div>';
@@ -2508,12 +2508,10 @@ function pgJt(){
       <select id="jtMode" onchange="renderJt()"><option value="bulan">Bulan terpilih</option><option value="lewat">Sudah lewat</option></select>
       ${adm&&cabs.length>1?`<select id="jtCab" onchange="renderJt()"><option value="">Semua cabang</option>${cabs.map(c=>`<option value="${esc(c)}">${esc(cbName(c))}</option>`).join('')}</select>`:''}
       ${adm?`<select id="jtAO" onchange="renderJt()"><option value="">Semua AO</option>${aos.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('')}</select>`:''}
-      ${adm?`<button class="btn-a" id="jtAiBtn" onclick="jtAnalisaAI()">\uD83E\uDD16 Analisa AI</button>`:''}
       <button class="btn-s" onclick="jtCSV()">\u2B07\uFE0F CSV</button>
       <button class="btn-s" onclick="jtCetak()">\uD83D\uDDA8\uFE0F Cetak</button>
     </div>
     <div id="jtLun"></div>
-    <div id="jtAiOut"></div>
     <div id="jtList"></div>
   </div>`;
   renderJt();
