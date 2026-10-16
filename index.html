@@ -331,6 +331,8 @@ img,canvas,video{max-width:100%}
 .slk .ana-g{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}.slk .ana-g input{margin:2px 0 6px}
 .slk .ana-go{display:block;width:100%;flex:none;margin:14px 0 4px;padding:14px;border:0;border-radius:12px;background:var(--ac);color:#fff;font-size:15px;font-weight:700;cursor:pointer}
 .slk .c h2.gn{color:var(--gn)}.slk .c h2.rd{color:var(--rd)}
+.slk select{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font-size:16px;margin:4px 0 8px}
+.slk label.btn input{display:none}
 .slk .bar{height:20px;background:var(--bd);border-radius:6px;overflow:hidden;position:relative;margin:6px 0}
 .slk .bar>span{display:block;height:100%}
 .slk .bar>i{position:absolute;top:0;bottom:0;width:1px;background:var(--tx);opacity:.4}
@@ -3272,7 +3274,7 @@ function anaCap(d,I){
     C.st=(C.hi+C.cic)<=C.lim?'aman':(C.lo+C.cic)<=C.lim?'batas':'lebih'}
   return C}
 
-function anaVerdict(d,A,C,I){
+function anaVerdict(d,A,C,I,X){
   const G=[],S=[],K=[],W=[];
   if(A.bad.length)G.push('Ada '+A.bad.length+' kontrak macet / hapus buku (sisa '+rp(d.sisaBad)+').');
   if(A.maxKolAkt>=3)G.push('Kontrak aktif saat ini berkolektibilitas '+A.maxKolAkt+' ('+KL[A.maxKolAkt]+').');
@@ -3292,7 +3294,8 @@ function anaVerdict(d,A,C,I){
   if(d.ex)S.push('Skor tidak dapat dihitung, data kredit masih tipis.');
   if(C.ib&&C.st==='batas')S.push('Plafon diajukan hanya muat jika cicilan lama di batas bawah estimasi.');
   if(C.ib&&!I.pl&&C.sLo<=0&&C.sHi>0)S.push('Kapasitas sisa sangat tipis (tergantung akurasi estimasi cicilan lama).');
-  if(A.irt)S.push('Status pekerjaan IRT/tidak bekerja: sumber penghasilan harus diverifikasi.');
+  if(A.irt&&!(X&&X.noIrt))S.push('Status pekerjaan IRT/tidak bekerja: sumber penghasilan harus diverifikasi.');
+  if(X){(X.G||[]).forEach(x=>G.push(x));(X.S||[]).forEach(x=>S.push(x));(X.K||[]).forEach(x=>K.push(x))}
   if(!d.ex&&d.skor>=600)K.push('Skor IdScore+ '+d.skor+' ('+d.kat+').');
   if(A.maxKolAkt===1&&!A.bad.length&&d.k.length)K.push('Semua kontrak aktif berstatus lancar.');
   if(A.n12&&!A.telat12)K.push('Tidak ada keterlambatan dalam '+A.n12+' bulan terakhir.');
@@ -3336,16 +3339,68 @@ function anaRek(d,A,C,V,I){
   if(A.irt)R.push('Status IRT: pastikan sumber penghasilan (suami/usaha sendiri) terdokumentasi, dan pertimbangkan penjamin.');
   return R}
 
-function anaInp(){const v=id=>n(($(id)||{}).value);return{ib:v('anaIb'),pl:v('anaPl'),tn:Math.max(1,v('anaTn')||12),mg:+String(($('anaMg')||{}).value||'18').replace(',','.')||18,bt:Math.min(100,Math.max(10,v('anaBt')||40))}}
 
-function anaDyn(d,A){
-  const I=anaInp(),C=anaCap(d,I),V=anaVerdict(d,A,C,I),R=anaRek(d,A,C,V,I),col={rd:'#c62828',yl:'#b7791f',gn:'#2e7d32'}[V.lv];
+let ST=null;
+async function slkReadFile(file,st){
+  await slkLoad();
+  const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;let L=[],p1=[];
+  for(let i=1;i<=pdf.numPages;i++){st('Halaman '+i+'/'+pdf.numPages);const l=await lines(await pdf.getPage(i));if(i===1)p1=l;L.push(...l);if(l.some(x=>x.includes('AKHIR LAPORAN')))break}
+  const S=x=>x.replace(/^¦\s*/,''),T=L.map(S).join('\n');
+  if(!T.includes('IdScore'))throw new Error('Bukan laporan PEFINDO IdScore+, atau PDF hasil scan.');
+  return parse(T,p1.map(S),L.join('\n'))}
+
+function anaInp(){
+  const v=id=>n(($(id)||{}).value);
+  return{ib:v('anaIb'),ib2:v('anaIb2'),pl:v('anaPl'),tn:Math.max(1,v('anaTn')||12),mg:+String(($('anaMg')||{}).value||'18').replace(',','.')||18,bt:Math.min(100,Math.max(10,v('anaBt')||40)),deb:+(($('anaDeb')||{}).value)||1}}
+
+function anaPersons(){
+  const one=!ST.d2;
+  const blk=(d,A,t)=>{
+    const ser=calSeries(d).slice(-12),ring=ser.length?'<div class="sc"><table><tr>'+ser.map(x=>'<th>'+BL[x.m]+'</th>').join('')+'</tr><tr>'+ser.map(x=>'<td class="k'+Math.min(x.k,5)+'">'+x.k+'|'+x.h+'</td>').join('')+'</tr></table></div>':'<div class="mu">Kalender pembayaran tidak tersedia.</div>';
+    return '<div class="c"><h2>'+(one?'':esc(t)+' — ')+'Skor perilaku kredit: <span class="'+A.grade[1]+'">'+A.total+'/100 ('+A.grade[0]+')</span></h2>'
+      +A.F.map(f=>'<div class="r"><span>'+esc(f.n)+'</span><b class="'+f.cl+'">'+f.p+'/'+f.m+'</b></div><div class="mu" style="margin:0 0 6px">'+esc(f.k)+'</div>').join('')
+      +'<h2 style="margin-top:8px">12 bulan terakhir (kol|hari)</h2>'+ring
+      +'<div class="mu">'+(A.n12?A.lancar12+' bulan lancar, '+A.telat12+' bulan bermasalah'+(A.last?'; kondisi terakhir kol '+A.last.k+' ('+A.last.h+' hari)':''):'')+(A.streak?'; '+A.streak+' bulan lancar berturut-turut sampai terakhir':'')+'</div></div>'};
+  $('anaP').innerHTML=blk(ST.d1,ST.A1,ST.d1.nama)+(ST.d2?blk(ST.d2,ST.A2,ST.d2.nama):'')}
+
+function pairUI(){
+  const two=!!ST.d2,sh=(id,on)=>{const e=$(id);if(e)e.style.display=on?'':'none'};
+  sh('anaW2',two);sh('anaWD',two);sh('anaDel',two);
+  $('anaLb1').textContent=two?'Penghasilan bersih/bulan: '+ST.d1.nama+' (Rp)':'Penghasilan bersih/bulan (Rp)';
+  if(two){$('anaLb2').textContent='Penghasilan bersih/bulan: '+ST.d2.nama+' (Rp)';
+    const cur=$('anaDeb').value||'1';$('anaDeb').innerHTML='<option value="1">'+esc(ST.d1.nama)+'</option><option value="2">'+esc(ST.d2.nama)+'</option>';$('anaDeb').value=cur}}
+
+function anaDyn(){
+  const d1=ST.d1,d2=ST.d2,A1=ST.A1,A2=ST.A2,two=!!d2,I=anaInp(),deb=two&&I.deb===2?2:1;
+  const dd=deb===2?d2:d1,Ad=deb===2?A2:A1,ds=two?(deb===2?d1:d2):null,As=two?(deb===2?A1:A2):null;
+  const ib1=I.ib,ib2=two?I.ib2:0,all=two?d1.k.concat(d2.k):d1.k;
+  const comb={lo:d1.lo+(two?d2.lo:0),hi:d1.hi+(two?d2.hi:0)},Ic=Object.assign({},I,{ib:ib1+ib2}),C=anaCap(comb,Ic);
+  const X={S:[],G:[],K:[],noIrt:false};
+  if(two){
+    const Vs=anaVerdict(ds,As,{},I);
+    Vs.G.forEach(x=>X.S.push('SLIK pasangan ('+ds.nama+'): '+x));
+    if(!Vs.G.length&&As.maxKolAkt===1&&!As.bad.length)X.K.push('SLIK pasangan ('+ds.nama+') tanpa catatan buruk.');
+    if(Ad.irt&&(deb===2?ib1:ib2)>0){X.noIrt=true;X.S.push('Penghasilan debitur bersumber dari pasangan: wajib persetujuan dan tanda tangan pasangan (sebagai penjamin).')}}
+  const V=anaVerdict(dd,Ad,C,Ic,X),R=anaRek(dd,Ad,C,V,Ic),col={rd:'#c62828',yl:'#b7791f',gn:'#2e7d32'}[V.lv];
+  if(two){if(ds.tg>0)R.push('Pasangan juga menunggak '+rp(ds.tg)+': sebaiknya diselesaikan lebih dulu.');
+    if(X.S.some(x=>/^SLIK pasangan/.test(x)))R.push('SLIK pasangan bermasalah: pertimbangkan hanya menghitung penghasilan debitur, atau minta pasangan menyelesaikan kewajibannya dulu.')}
   const why=(V.lv==='rd'?V.G:V.S).slice(0,3);
   $('anaV').innerHTML='<div class="v" style="background:'+col+'">'+V.tt+'<small>'+esc(V.sb)+'</small></div>'
+    +(two?'<div class="mu" style="text-align:center">Dinilai atas nama <b>'+esc(dd.nama)+'</b>, dengan penghasilan dan kewajiban suami-istri digabung.</div>':'')
     +(why.length?'<div class="c"><h2>Alasan utama</h2><ul>'+why.map(x=>'<li class="'+V.lv+'">'+esc(x)+'</li>').join('')+'</ul></div>':'');
-  let h='<div class="c"><h2>Kapasitas pembayaran</h2>';
-  h+='<div class="r"><span>Cicilan berjalan (estimasi)</span><b>'+(d.k.filter(c=>c.A).length?rp(C.lo)+' – '+rp(C.hi):'-')+'</b></div>';
-  if(!C.ib){h+='<div class="note">Isi <b>penghasilan bersih/bulan</b> untuk menghitung sisa kapasitas. Penghasilan minimal agar beban ≤'+I.bt+'% jika tanpa tambahan cicilan: <b>'+rp(C.hi/(I.bt/100))+'</b>.</div>'}
+  /* rangkuman kewajiban suami-istri */
+  if(two){
+    const row=(d,ib)=>'<tr><td style="text-align:left">'+esc(d.nama)+'</td><td>'+(d.aktif||0)+'</td><td>'+rp(d.saldo)+'</td><td class="'+(d.tg?'rd':'')+'">'+rp(d.tg)+'</td><td>'+rp(d.lo)+' – '+rp(d.hi)+'</td><td>'+(ib?rp(ib):'-')+'</td><td>'+(ib?pct(d.lo/ib)+'–'+pct(d.hi/ib):'-')+'</td></tr>';
+    const tot=(+d1.aktif||0)+(+d2.aktif||0),tI=ib1+ib2,tK=(d1.total||0)+(d2.total||0);
+    $('anaS').innerHTML='<div class="c"><h2>Rangkuman kewajiban suami-istri</h2><div class="sc"><table><tr><th>Nama</th><th>Kontrak aktif</th><th>Sisa utang</th><th>Tunggakan</th><th>Cicilan/bln (est)</th><th>Penghasilan</th><th>Beban</th></tr>'
+      +row(d1,ib1)+row(d2,ib2)
+      +'<tr style="font-weight:700"><td style="text-align:left">Gabungan</td><td>'+tot+'</td><td>'+rp(d1.saldo+d2.saldo)+'</td><td>'+rp(d1.tg+d2.tg)+'</td><td>'+rp(comb.lo)+' – '+rp(comb.hi)+'</td><td>'+(tI?rp(tI):'-')+'</td><td>'+(tI?pct(comb.lo/tI)+'–'+pct(comb.hi/tI):'-')+'</td></tr></table></div>'
+      +'<div class="r" style="margin-top:6px"><span>Total kewajiban gabungan</span><b>'+rp(tK)+'</b></div><div class="mu">Sisa utang + tunggakan + sisa macet/hapus buku, dari kedua SLIK.</div></div>'
+  }else $('anaS').innerHTML='';
+  let h='<div class="c"><h2>Kapasitas pembayaran'+(two?' gabungan':'')+'</h2>';
+  h+=(two&&C.ib?'<div class="r"><span>Penghasilan gabungan</span><b>'+rp(C.ib)+'</b></div>':'')
+    +'<div class="r"><span>Cicilan berjalan'+(two?' (kedua SLIK)':'')+' (estimasi)</span><b>'+(all.some(c=>c.A)?rp(C.lo)+' – '+rp(C.hi):'-')+'</b></div>';
+  if(!C.ib){h+='<div class="note">Isi <b>penghasilan bersih/bulan</b>'+(two?' suami dan istri':'')+' untuk menghitung sisa kapasitas. Penghasilan minimal agar beban ≤'+I.bt+'% tanpa tambahan cicilan: <b>'+rp(C.hi/(I.bt/100))+'</b>.</div>'}
   else{
     h+='<div class="r"><span>Batas cicilan total ('+I.bt+'%)</span><b>'+rp(C.lim)+'</b></div>'
      +'<div class="r"><span>Beban saat ini</span><b class="'+(C.dHi>I.bt/100?'rd':C.dHi>.3?'yl':'gn')+'">'+pct(C.dLo)+' – '+pct(C.dHi)+'</b></div>'
@@ -3364,25 +3419,33 @@ function anaDyn(d,A){
     +(V.W.length?'<div class="c"><h2 class="rd">Hal yang memberatkan</h2><ul>'+V.W.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div>':'')}
 
 function anaOpen(d){
-  const A=anaCalc(d),box=$('slkAna'),cl={gn:'gn',yl:'yl',rd:'rd'};
-  const ser=calSeries(d).slice(-12),ring=ser.length?'<div class="sc"><table><tr>'+ser.map(x=>'<th>'+BL[x.m]+'</th>').join('')+'</tr><tr>'+ser.map(x=>'<td class="k'+Math.min(x.k,5)+'">'+x.k+'|'+x.h+'</td>').join('')+'</tr></table></div>':'<div class="mu">Kalender pembayaran tidak tersedia.</div>';
+  ST={d1:d,d2:null,A1:anaCalc(d),A2:null};
+  const box=$('slkAna');
   box.innerHTML='<div class="c" style="border-color:var(--ac);border-width:2px"><h2 style="font-size:17px">🧠 Analisa Lebih Dalam</h2>'
-    +'<div class="mu">Kelayakan pembiayaan dan sisa kapasitas, dihitung dari isi SLIK di atas.</div></div>'
+    +'<div class="mu">Kelayakan pembiayaan dan sisa kapasitas, dihitung dari isi SLIK di atas. Bisa digabung dengan SLIK pasangan.</div></div>'
     +'<div id="anaV"></div>'
-    +'<div class="c"><h2>Data pengajuan (opsional)</h2><div class="ana-g">'
-    +'<div><label class="mu">Penghasilan bersih/bulan (Rp)</label><input id="anaIb" inputmode="numeric" placeholder="5000000"></div>'
+    +'<div class="c"><h2>SLIK pasangan (opsional)</h2><div class="mu">Unggah SLIK suami/istri agar penghasilan dan kewajiban keduanya dihitung bersama. Dibaca di perangkat ini saja.</div>'
+    +'<label class="btn" style="margin-top:8px">Pilih PDF SLIK pasangan<input id="anaF2" type="file" accept="application/pdf" hidden></label>'
+    +'<div id="anaSt2" class="mu"></div><div class="slkbar"><button type="button" id="anaDel" style="display:none">Hapus SLIK pasangan</button></div></div>'
+    +'<div class="c"><h2>Data pengajuan</h2><div class="ana-g">'
+    +'<div><label class="mu" id="anaLb1">Penghasilan bersih/bulan (Rp)</label><input id="anaIb" inputmode="numeric" placeholder="5000000"></div>'
+    +'<div id="anaW2" style="display:none"><label class="mu" id="anaLb2">Penghasilan pasangan (Rp)</label><input id="anaIb2" inputmode="numeric" placeholder="3000000"></div>'
+    +'<div id="anaWD" style="display:none;grid-column:1/-1"><label class="mu">Pembiayaan atas nama</label><select id="anaDeb"></select></div>'
     +'<div><label class="mu">Plafon diajukan (Rp)</label><input id="anaPl" inputmode="numeric" placeholder="10000000"></div>'
     +'<div><label class="mu">Tenor (bulan)</label><input id="anaTn" inputmode="numeric" value="12"></div>'
     +'<div><label class="mu">Margin flat (%/thn)</label><input id="anaMg" inputmode="decimal" value="18"></div>'
     +'<div><label class="mu">Batas beban (%)</label><input id="anaBt" inputmode="numeric" value="40"></div></div></div>'
-    +'<div id="anaK"></div>'
-    +'<div class="c"><h2>Skor perilaku kredit: <span class="'+A.grade[1]+'">'+A.total+'/100 ('+A.grade[0]+')</span></h2>'
-    +A.F.map(f=>'<div class="r"><span>'+esc(f.n)+'</span><b class="'+f.cl+'">'+f.p+'/'+f.m+'</b></div><div class="mu" style="margin:0 0 6px">'+esc(f.k)+'</div>').join('')+'</div>'
-    +'<div class="c"><h2>12 bulan terakhir (kol|hari)</h2>'+ring
-    +'<div class="mu">'+(A.n12?A.lancar12+' bulan lancar, '+A.telat12+' bulan bermasalah'+(A.last?'; kondisi terakhir kol '+A.last.k+' ('+A.last.h+' hari)':''):'')+(A.streak?'; '+A.streak+' bulan lancar berturut-turut sampai terakhir':'')+'</div></div>'
-    +'<div id="anaT"></div><div id="anaR"></div>'
+    +'<div id="anaS"></div><div id="anaK"></div><div id="anaP"></div><div id="anaT"></div><div id="anaR"></div>'
     +'<div class="note">Analisa ini alat bantu otomatis berbasis aturan penilaian di perangkat ini; data tidak dikirim ke server. Keputusan akhir tetap di komite pembiayaan setelah survei dan verifikasi penghasilan.</div>';
-  const go=()=>anaDyn(d,A);['anaIb','anaPl','anaTn','anaMg','anaBt'].forEach(i=>$(i).oninput=go);go();
+  const go=()=>anaDyn();['anaIb','anaIb2','anaPl','anaTn','anaMg','anaBt'].forEach(i=>$(i).oninput=go);$('anaDeb').onchange=go;
+  $('anaDel').onclick=()=>{ST.d2=null;ST.A2=null;$('anaSt2').textContent='';pairUI();anaPersons();go()};
+  $('anaF2').onchange=async e=>{const file=e.target.files[0];if(!file)return;const st=$('anaSt2');
+    try{st.textContent='Membaca...';const x=await slkReadFile(file,t=>st.textContent=t);
+      if(x.nik&&ST.d1.nik&&x.nik===ST.d1.nik)throw new Error('NIK sama dengan SLIK pertama. Unggah SLIK pasangan yang berbeda.');
+      ST.d2=x;ST.A2=anaCalc(x);st.innerHTML='<span class="gn">Terbaca: '+esc(x.nama)+'</span>';pairUI();anaPersons();go()}
+    catch(err){st.innerHTML='<span class="rd">Gagal: '+esc(err.message||err)+'</span>'}
+    e.target.value=''};
+  pairUI();anaPersons();go();
   box.scrollIntoView({behavior:'smooth',block:'start'})}
 
 
