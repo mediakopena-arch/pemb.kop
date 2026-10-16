@@ -328,6 +328,9 @@ img,canvas,video{max-width:100%}
 .slk .kv>div b{display:block;font-size:13px;word-break:break-word}
 .slk .kv>div span{font-size:11px;color:var(--mu);display:block;text-transform:uppercase}
 .slk .note{font-size:12px;color:var(--mu);background:var(--bg);padding:8px;border-radius:8px;margin-top:6px;border:1px dashed var(--bd)}
+.slk .ana-g{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}.slk .ana-g input{margin:2px 0 6px}
+.slk .ana-go{display:block;width:100%;flex:none;margin:14px 0 4px;padding:14px;border:0;border-radius:12px;background:var(--ac);color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+.slk .c h2.gn{color:var(--gn)}.slk .c h2.rd{color:var(--rd)}
 .slk .bar{height:20px;background:var(--bd);border-radius:6px;overflow:hidden;position:relative;margin:6px 0}
 .slk .bar>span{display:block;height:100%}
 .slk .bar>i{position:absolute;top:0;bottom:0;width:1px;background:var(--tx);opacity:.4}
@@ -3117,6 +3120,10 @@ d.sisaBad=d.k.filter(c=>c.bad).reduce((s,c)=>s+c.saldo,0);
 d.total=d.saldo+d.tg+d.sisaBad;
 d.agunanList=parseAgunanGlobal(TM||T);
 d.totalAgunan=d.agunanList.filter(x=>x._aktif).reduce((s,x)=>s+(x.nilai||x.njop||0),0);
+try{d.tglLap=g(/Tanggal Laporan:\s*(\d\d \w{3} \d{4})/);
+const mq=T.match(/(\d+)\s+Jumlah pelapor melakukan permintaan/);d.minta=mq?+mq[1]:0;
+const cb=(T.split('Kontrak Ditutup sebagai Debitur')[1]||'').split(/^\d+\. Fasilitas.*$/m).slice(1);
+d.cl={n:cb.length,bad:cb.filter(b=>{const q=+g(/Kolektibilitas terburuk\s+(\d)\s/,b)||1;return q>=3||/hapus/i.test(g(new RegExp('Status kontrak\\s+(.+?)'+D),b))}).length}}catch(e){d.cl={n:0,bad:0}}
 return d}
 
 function renderAgunan(a,i){
@@ -3195,14 +3202,189 @@ $('slkOut').innerHTML='<div class="v" style="background:'+v[1]+'">'+v[0]+'<small
 +'<div class="c"><h2>Kalender</h2><div class="sc"><table><tr><th></th>'+BL.map(x=>'<th>'+x.slice(0,3)+'</th>').join('')+'</tr>'+cal+'</table></div></div>'
 +'<div class="c"><h2>Simulasi tambahan</h2><label class="mu">Angsuran baru (Rp)</label><input id="slkNb" inputmode="numeric" placeholder="1375000"><label class="mu">Penghasilan/bulan (Rp)</label><input id="slkPg" inputmode="numeric" placeholder="5000000"><div id="slkSim"></div></div>'
 +'<h2>Kontrak aktif</h2>'+kk
-+agBlock;
++agBlock
++'<button type="button" id="slkAnaBtn" class="ana-go">\uD83E\uDDE0 Analisa Lebih Dalam</button><div id="slkAna"></div>';
 const sim=()=>{const b=n(($('slkNb').value||'').replace(/\D/g,'')),p=n(($('slkPg').value||'').replace(/\D/g,''));
 const a=d.lo+b,z=d.hi+b;
 let h='<div class="r"><span>Total setelah tambahan</span><b>'+rp(a)+' – '+rp(z)+'</b></div><div class="r"><span>Penghasilan minimal (40%)</span><b>'+rp(a/.4)+' – '+rp(z/.4)+'</b></div>';
 if(p){const r1=a/p*100,r2=z/p*100,cl=r1>40?'rd':r1>30?'yl':'gn',co=r1>40?'#c62828':r1>30?'#b7791f':'#2e7d32';
 h+='<div class="r"><span>DTI</span><b class="'+cl+'">'+Math.round(r1)+'% – '+Math.round(r2)+'%</b></div><div class="bar"><span style="width:'+Math.min(100,r2)+'%;background:'+co+'"></span><i style="left:30%"></i><i style="left:40%"></i><i style="left:50%"></i></div>';
 h+='<div class="note">'+(r1>40?'<span class="rd">Beban melebihi batas wajar 40%.</span>':r1>30?'<span class="yl">Mendekati batas wajar.</span>':'<span class="gn">Masih dalam batas wajar.</span>')+'</div>'}
-$('slkSim').innerHTML=h};$('slkNb').oninput=$('slkPg').oninput=sim;sim()}
+$('slkSim').innerHTML=h};$('slkNb').oninput=$('slkPg').oninput=sim;sim();$('slkAnaBtn').onclick=()=>anaOpen(d)}
+
+/* ===== ANALISA LEBIH DALAM (aturan penilaian lokal; tidak dikirim ke server) ===== */
+const IRT=/rumah tangga|housewife|ibu rumah|tidak bekerja|belum bekerja/i;
+const pct=x=>Math.round(x*100)+'%';
+function calSeries(d){const o=[];Object.keys(d.cal||{}).sort().forEach(y=>d.cal[y].forEach((x,i)=>{if(x)o.push({y:+y,m:i,k:x[0],h:x[1]})}));return o}
+function anaCalc(d){
+  const A={},ser=calSeries(d),w12=ser.slice(-12),w6=ser.slice(-6),mx=(a,f,b)=>a.reduce((s,x)=>Math.max(s,f(x)),b);
+  A.n12=w12.length;A.lancar12=w12.filter(x=>x.k===1).length;A.telat12=w12.filter(x=>x.k>=2).length;
+  A.worstK12=mx(w12,x=>x.k,1);A.worstH12=mx(w12,x=>x.h,0);A.worstK6=mx(w6,x=>x.k,1);A.last=ser[ser.length-1]||null;
+  let st=0;for(let i=ser.length-1;i>=0&&ser[i].k===1;i--)st++;A.streak=st;
+  const av=a=>a.length?a.reduce((s,x)=>s+x.k,0)/a.length:0,r3=ser.slice(-3),p3=ser.slice(-6,-3);
+  A.trend=(r3.length>=2&&p3.length>=2)?(av(r3)>av(p3)+.2?'memburuk':av(r3)<av(p3)-.2?'membaik':'stabil'):'';
+  const act=d.k.filter(c=>!c.bad);
+  A.maxKolAkt=act.reduce((s,c)=>Math.max(s,c.kol||1),1);
+  A.bad=d.k.filter(c=>c.bad);
+  A.hi=d.k.filter(c=>c.hiRate&&!c.bad);
+  A.pelN=new Set(d.k.map(c=>c.pel)).size;
+  A.bnpl=d.k.filter(c=>/pay\s?later|bnpl|channeling/i.test((c.tipe||'')+' '+(c.pel||'')));
+  const ref=dt(d.tglLap)||new Date();
+  A.baru90=d.k.filter(c=>{const t=dt(c.mulai);return t&&(ref-t)/864e5<=90&&(ref-t)>=0}).length;
+  A.irt=IRT.test(d.kerja||'');
+  /* skor perilaku kredit 0-100 */
+  const F=[];
+  let p,k,cl;
+  if(d.ex){p=15;k='Skor tidak dapat dihitung (data 24 bulan kurang), dinilai netral';cl='yl'}
+  else{const s=d.skor||0;p=s>=750?30:s>=650?25:s>=550?19:s>=450?11:s>=400?5:0;k='IdScore+ '+s+' ('+(d.kat||'-')+'), peluang DPD 90+ '+(d.dpd||'-')+'%';cl=p>=19?'gn':p>=11?'yl':'rd'}
+  F.push({n:'Skor IdScore+',p,m:30,k,cl});
+  if(A.bad.length){p=0;k=A.bad.length+' kontrak macet / hapus buku';cl='rd'}
+  else if(!act.length){p=d.tutup>0?25:15;k=d.tutup>0?'Tidak ada kontrak aktif, riwayat kontrak lama tersedia':'Tidak ada riwayat kredit sama sekali (thin file)';cl=d.tutup>0?'gn':'yl'}
+  else{p=A.maxKolAkt===1?25:A.maxKolAkt===2?12:A.maxKolAkt===3?3:0;k='Kolektibilitas terburuk kontrak aktif: '+A.maxKolAkt+' - '+KL[A.maxKolAkt];cl=p>=25?'gn':p>=12?'yl':'rd'}
+  F.push({n:'Kolektibilitas saat ini',p,m:25,k,cl});
+  if(!A.n12){p=10;k='Kalender pembayaran tidak tersedia';cl='yl'}
+  else{p=A.worstK12===1?20:A.worstK12===2?(A.worstH12<30?12:8):A.worstK12===3?4:0;
+    k=A.lancar12+' dari '+A.n12+' bulan lancar; terburuk kol '+A.worstK12+' ('+A.worstH12+' hari)'+(A.trend?'; tren '+A.trend:'');cl=p>=20?'gn':p>=8?'yl':'rd'}
+  F.push({n:'Riwayat 12 bulan terakhir',p,m:20,k,cl});
+  if(A.bad.length){p=0;k='Ada sisa macet '+rp(d.sisaBad);cl='rd'}
+  else if(d.tg>0){p=(+d.hrw>=30||d.k.some(c=>c.hari>=30))?0:7;k='Tunggakan berjalan '+rp(d.tg);cl=p?'yl':'rd'}
+  else{p=15;k='Tidak ada tunggakan';cl='gn'}
+  F.push({n:'Tunggakan & macet',p,m:15,k,cl});
+  p=10;const kt=[];
+  if(+d.aktif>=10){p-=6;kt.push(d.aktif+' kontrak aktif')}else if(+d.aktif>=6){p-=3;kt.push(d.aktif+' kontrak aktif')}
+  if(A.hi.length){p-=2;kt.push(A.hi.length+' bunga sangat tinggi')}
+  if(A.baru90>=3){p-=2;kt.push(A.baru90+' kontrak baru ≤90 hari')}
+  if(d.minta>=6){p-=2;kt.push(d.minta+' permintaan kredit/12 bln')}
+  p=Math.max(0,p);F.push({n:'Struktur & pola utang',p,m:10,k:kt.length?kt.join(', '):'Tidak ada pola mencurigakan',cl:p>=8?'gn':p>=5?'yl':'rd'});
+  A.F=F;A.total=F.reduce((s,f)=>s+f.p,0);
+  A.grade=A.total>=75?['Baik','gn']:A.total>=55?['Sedang','yl']:A.total>=35?['Rendah','rd']:['Sangat rendah','rd'];
+  return A}
+
+function anaCap(d,I){
+  const C={ib:I.ib,lo:d.lo||0,hi:d.hi||0};
+  if(!I.ib)return C;
+  const pf=(c,m)=>c*m/(1+(I.mg/100)*(m/12));
+  C.lim=I.bt/100*I.ib;C.sLo=Math.max(0,C.lim-C.hi);C.sHi=Math.max(0,C.lim-C.lo);
+  C.dLo=C.lo/I.ib;C.dHi=C.hi/I.ib;
+  C.pLo=pf(C.sLo,I.tn);C.pHi=pf(C.sHi,I.tn);
+  C.tab=[12,24,36].map(m=>({m,lo:pf(C.sLo,m),hi:pf(C.sHi,m)}));
+  if(I.pl){C.cic=flat(I.pl,I.mg,I.tn);C.aLo=(C.lo+C.cic)/I.ib;C.aHi=(C.hi+C.cic)/I.ib;
+    C.st=(C.hi+C.cic)<=C.lim?'aman':(C.lo+C.cic)<=C.lim?'batas':'lebih'}
+  return C}
+
+function anaVerdict(d,A,C,I){
+  const G=[],S=[],K=[],W=[];
+  if(A.bad.length)G.push('Ada '+A.bad.length+' kontrak macet / hapus buku (sisa '+rp(d.sisaBad)+').');
+  if(A.maxKolAkt>=3)G.push('Kontrak aktif saat ini berkolektibilitas '+A.maxKolAkt+' ('+KL[A.maxKolAkt]+').');
+  if(A.worstK12>=4)G.push('Dalam 12 bulan terakhir pernah kolektibilitas '+A.worstK12+' ('+KL[A.worstK12]+', '+A.worstH12+' hari).');
+  else if(A.worstH12>=90)G.push('Dalam 12 bulan terakhir pernah menunggak '+A.worstH12+' hari.');
+  if(!d.ex&&d.skor&&d.skor<=400)G.push('Skor IdScore+ '+d.skor+' ('+d.kat+') = risiko sangat tinggi, peluang DPD 90+ '+(d.dpd||'-')+'%.');
+  if(C.ib){
+    if(C.sHi<=0)G.push('Tidak ada sisa kapasitas: cicilan berjalan sudah melewati batas '+I.bt+'% dari penghasilan.');
+    else if(C.st==='lebih')G.push('Plafon diajukan ('+rp(I.pl)+') melebihi kapasitas maksimum; cicilan '+rp(C.cic)+'/bln membuat beban '+pct(C.aLo)+'–'+pct(C.aHi)+' dari penghasilan.');
+  }
+  if(A.telat12>0&&A.worstK12<4)S.push('Pernah terlambat '+A.telat12+' bulan dalam 12 bulan terakhir (terburuk '+A.worstH12+' hari).');
+  if(d.tg>0&&!A.bad.length)S.push('Masih ada tunggakan '+rp(d.tg)+'.');
+  if(A.total<70&&!G.length)S.push('Skor perilaku kredit '+A.total+'/100 ('+A.grade[0].toLowerCase()+').');
+  if(A.hi.length)S.push(A.hi.length+' kontrak berbunga sangat tinggi (>100%/thn).');
+  if(+d.aktif>=6)S.push(d.aktif+' kontrak aktif sekaligus.');
+  if(A.baru90>=3)S.push(A.baru90+' kontrak baru dalam 90 hari terakhir (indikasi menumpuk utang).');
+  if(d.ex)S.push('Skor tidak dapat dihitung, data kredit masih tipis.');
+  if(C.ib&&C.st==='batas')S.push('Plafon diajukan hanya muat jika cicilan lama di batas bawah estimasi.');
+  if(C.ib&&!I.pl&&C.sLo<=0&&C.sHi>0)S.push('Kapasitas sisa sangat tipis (tergantung akurasi estimasi cicilan lama).');
+  if(A.irt)S.push('Status pekerjaan IRT/tidak bekerja: sumber penghasilan harus diverifikasi.');
+  if(!d.ex&&d.skor>=600)K.push('Skor IdScore+ '+d.skor+' ('+d.kat+').');
+  if(A.maxKolAkt===1&&!A.bad.length&&d.k.length)K.push('Semua kontrak aktif berstatus lancar.');
+  if(A.n12&&!A.telat12)K.push('Tidak ada keterlambatan dalam '+A.n12+' bulan terakhir.');
+  else if(A.streak>=6)K.push(A.streak+' bulan terakhir berturut-turut lancar.');
+  if(!d.tg)K.push('Tidak ada tunggakan berjalan.');
+  if(+d.tutup>=5&&!A.bad.length)K.push(d.tutup+' kontrak telah ditutup (riwayat pelunasan panjang).');
+  if(d.totalAgunan)K.push('Ada agunan aktif senilai '+rp(d.totalAgunan)+'.');
+  if(d.cl&&d.cl.n&&!d.cl.bad)K.push('Kontrak lama yang sudah ditutup tidak ada yang macet.');
+  if(A.bad.length)W.push('Kontrak macet/hapus buku: '+A.bad.map(c=>c.pel).join(', ')+'.');
+  if(d.tg>0)W.push('Tunggakan '+rp(d.tg)+(d.hrw?' (pernah telat '+d.hrw+' hari)':'')+'.');
+  if(A.trend==='memburuk')W.push('Tren pembayaran 3 bulan terakhir memburuk dibanding 3 bulan sebelumnya.');
+  if(d.cl&&d.cl.bad)W.push(d.cl.bad+' dari '+d.cl.n+' kontrak lama pernah berakhir dengan kolektibilitas buruk (≥3).');
+  if(A.bnpl.length>=3)W.push(A.bnpl.length+' kontrak BNPL/paylater/channeling aktif (pola pinjaman konsumtif kecil-kecil).');
+  if(d.skor&&!d.ex&&d.skor<=500&&d.skor>400)W.push('Skor IdScore+ rendah ('+d.skor+').');
+  S.forEach(s=>{if(!W.includes(s)&&!/IRT/.test(s))W.push(s)});
+  let lv,tt,sb;
+  if(G.length){lv='rd';tt='TIDAK LAYAK';sb='Belum disarankan diberi pembiayaan'}
+  else if(S.length){lv='yl';tt='LAYAK BERSYARAT';sb='Boleh dipertimbangkan dengan pembatasan dan syarat'}
+  else{lv='gn';tt='LAYAK';sb=C.ib?'Riwayat dan kapasitas mendukung':'Dari sisi riwayat SLIK. Isi penghasilan untuk menghitung kapasitas'}
+  return{lv,tt,sb,G,S,K,W}}
+
+function anaRek(d,A,C,V,I){
+  const R=[];
+  if(V.lv==='rd'){
+    R.push('Tolak atau tunda pengajuan saat ini.');
+    if(A.bad.length||d.tg>0)R.push('Calon anggota perlu menyelesaikan tunggakan/kontrak macet lebih dulu dan membawa bukti lunas dari pelapor.');
+    R.push('Evaluasi ulang dengan SLIK terbaru setelah minimal 6 bulan pembayaran lancar berturut-turut.');
+    if(C.ib&&C.sHi>0&&!A.bad.length&&A.maxKolAkt<3&&A.worstK12<4)R.push('Jika tetap diproses, plafon maksimum sesuai kapasitas: '+rp(C.pLo)+' – '+rp(C.pHi)+' (tenor '+I.tn+' bln).');
+  }else{
+    if(C.ib){R.push('Plafon maksimum yang disarankan: '+rp(C.pLo)+' – '+rp(C.pHi)+' untuk tenor '+I.tn+' bulan (batas beban '+I.bt+'% penghasilan).');
+      R.push('Sisa kapasitas cicilan per bulan: '+rp(C.sLo)+' – '+rp(C.sHi)+'.')}
+    else R.push('Isi penghasilan bersih per bulan di atas untuk melihat sisa kapasitas dan plafon maksimum.');
+    if(V.lv==='yl'){
+      if(d.tg>0)R.push('Minta tunggakan '+rp(d.tg)+' dilunasi lebih dulu sebelum pencairan.');
+      R.push('Utamakan plafon kecil/tenor pendek; pertimbangkan agunan atau penjamin.');
+      R.push('Pembayaran lewat autodebet atau potong penghasilan bila memungkinkan.');
+      if(A.baru90>=3||A.hi.length||A.bnpl.length>=3)R.push('Tanyakan tujuan penggunaan dana; jangan dipakai menutup utang lain.');
+    }
+    R.push('Lakukan survei dan verifikasi penghasilan secara langsung.');
+  }
+  if(A.irt)R.push('Status IRT: pastikan sumber penghasilan (suami/usaha sendiri) terdokumentasi, dan pertimbangkan penjamin.');
+  return R}
+
+function anaInp(){const v=id=>n(($(id)||{}).value);return{ib:v('anaIb'),pl:v('anaPl'),tn:Math.max(1,v('anaTn')||12),mg:+String(($('anaMg')||{}).value||'18').replace(',','.')||18,bt:Math.min(100,Math.max(10,v('anaBt')||40))}}
+
+function anaDyn(d,A){
+  const I=anaInp(),C=anaCap(d,I),V=anaVerdict(d,A,C,I),R=anaRek(d,A,C,V,I),col={rd:'#c62828',yl:'#b7791f',gn:'#2e7d32'}[V.lv];
+  const why=(V.lv==='rd'?V.G:V.S).slice(0,3);
+  $('anaV').innerHTML='<div class="v" style="background:'+col+'">'+V.tt+'<small>'+esc(V.sb)+'</small></div>'
+    +(why.length?'<div class="c"><h2>Alasan utama</h2><ul>'+why.map(x=>'<li class="'+V.lv+'">'+esc(x)+'</li>').join('')+'</ul></div>':'');
+  let h='<div class="c"><h2>Kapasitas pembayaran</h2>';
+  h+='<div class="r"><span>Cicilan berjalan (estimasi)</span><b>'+(d.k.filter(c=>c.A).length?rp(C.lo)+' – '+rp(C.hi):'-')+'</b></div>';
+  if(!C.ib){h+='<div class="note">Isi <b>penghasilan bersih/bulan</b> untuk menghitung sisa kapasitas. Penghasilan minimal agar beban ≤'+I.bt+'% jika tanpa tambahan cicilan: <b>'+rp(C.hi/(I.bt/100))+'</b>.</div>'}
+  else{
+    h+='<div class="r"><span>Batas cicilan total ('+I.bt+'%)</span><b>'+rp(C.lim)+'</b></div>'
+     +'<div class="r"><span>Beban saat ini</span><b class="'+(C.dHi>I.bt/100?'rd':C.dHi>.3?'yl':'gn')+'">'+pct(C.dLo)+' – '+pct(C.dHi)+'</b></div>'
+     +'<div class="r"><span>Sisa kapasitas cicilan/bulan</span><b class="'+(C.sHi>0?'gn':'rd')+'">'+rp(C.sLo)+' – '+rp(C.sHi)+'</b></div>'
+     +'<div class="r"><span>Plafon maksimum ('+I.tn+' bln, flat '+I.mg+'%)</span><b>'+rp(C.pLo)+' – '+rp(C.pHi)+'</b></div>'
+     +'<div class="sc"><table style="margin-top:6px"><tr><th>Tenor</th><th>Plafon min</th><th>Plafon maks</th></tr>'+C.tab.map(t=>'<tr><td>'+t.m+' bln</td><td>'+rp(t.lo)+'</td><td>'+rp(t.hi)+'</td></tr>').join('')+'</table></div>';
+    if(I.pl){const cl=C.st==='aman'?'gn':C.st==='batas'?'yl':'rd';
+      h+='<div class="r" style="margin-top:6px"><span>Cicilan baru diajukan</span><b>'+rp(C.cic)+'</b></div>'
+       +'<div class="r"><span>Beban setelah tambahan</span><b class="'+cl+'">'+pct(C.aLo)+' – '+pct(C.aHi)+'</b></div>'
+       +'<div class="note">'+(C.st==='aman'?'<span class="gn">Plafon diajukan masih muat dalam kapasitas.</span>':C.st==='batas'?'<span class="yl">Muat hanya bila estimasi cicilan lama di batas bawah. Turunkan plafon atau perpendek risiko.</span>':'<span class="rd">Melebihi kapasitas. Turunkan plafon atau perpanjang tenor.</span>')+'</div>'}
+  }
+  h+='<div class="note">Cicilan lama diperkirakan dari saldo ÷ sisa tenor (SLIK tidak memuat nilai cicilan sebenarnya), jadi hasilnya berupa rentang.</div></div>';
+  $('anaK').innerHTML=h;
+  $('anaR').innerHTML='<div class="c"><h2>Rekomendasi</h2><ul>'+R.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div>';
+  $('anaT').innerHTML=(V.K.length?'<div class="c"><h2 class="gn">Hal yang mendukung</h2><ul>'+V.K.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div>':'')
+    +(V.W.length?'<div class="c"><h2 class="rd">Hal yang memberatkan</h2><ul>'+V.W.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div>':'')}
+
+function anaOpen(d){
+  const A=anaCalc(d),box=$('slkAna'),cl={gn:'gn',yl:'yl',rd:'rd'};
+  const ser=calSeries(d).slice(-12),ring=ser.length?'<div class="sc"><table><tr>'+ser.map(x=>'<th>'+BL[x.m]+'</th>').join('')+'</tr><tr>'+ser.map(x=>'<td class="k'+Math.min(x.k,5)+'">'+x.k+'|'+x.h+'</td>').join('')+'</tr></table></div>':'<div class="mu">Kalender pembayaran tidak tersedia.</div>';
+  box.innerHTML='<div class="c" style="border-color:var(--ac);border-width:2px"><h2 style="font-size:17px">🧠 Analisa Lebih Dalam</h2>'
+    +'<div class="mu">Kelayakan pembiayaan dan sisa kapasitas, dihitung dari isi SLIK di atas.</div></div>'
+    +'<div id="anaV"></div>'
+    +'<div class="c"><h2>Data pengajuan (opsional)</h2><div class="ana-g">'
+    +'<div><label class="mu">Penghasilan bersih/bulan (Rp)</label><input id="anaIb" inputmode="numeric" placeholder="5000000"></div>'
+    +'<div><label class="mu">Plafon diajukan (Rp)</label><input id="anaPl" inputmode="numeric" placeholder="10000000"></div>'
+    +'<div><label class="mu">Tenor (bulan)</label><input id="anaTn" inputmode="numeric" value="12"></div>'
+    +'<div><label class="mu">Margin flat (%/thn)</label><input id="anaMg" inputmode="decimal" value="18"></div>'
+    +'<div><label class="mu">Batas beban (%)</label><input id="anaBt" inputmode="numeric" value="40"></div></div></div>'
+    +'<div id="anaK"></div>'
+    +'<div class="c"><h2>Skor perilaku kredit: <span class="'+A.grade[1]+'">'+A.total+'/100 ('+A.grade[0]+')</span></h2>'
+    +A.F.map(f=>'<div class="r"><span>'+esc(f.n)+'</span><b class="'+f.cl+'">'+f.p+'/'+f.m+'</b></div><div class="mu" style="margin:0 0 6px">'+esc(f.k)+'</div>').join('')+'</div>'
+    +'<div class="c"><h2>12 bulan terakhir (kol|hari)</h2>'+ring
+    +'<div class="mu">'+(A.n12?A.lancar12+' bulan lancar, '+A.telat12+' bulan bermasalah'+(A.last?'; kondisi terakhir kol '+A.last.k+' ('+A.last.h+' hari)':''):'')+(A.streak?'; '+A.streak+' bulan lancar berturut-turut sampai terakhir':'')+'</div></div>'
+    +'<div id="anaT"></div><div id="anaR"></div>'
+    +'<div class="note">Analisa ini alat bantu otomatis berbasis aturan penilaian di perangkat ini; data tidak dikirim ke server. Keputusan akhir tetap di komite pembiayaan setelah survei dan verifikasi penghasilan.</div>';
+  const go=()=>anaDyn(d,A);['anaIb','anaPl','anaTn','anaMg','anaBt'].forEach(i=>$(i).oninput=go);go();
+  box.scrollIntoView({behavior:'smooth',block:'start'})}
+
 
 window.slkClear=function(){const o=document.getElementById('slkOut'),s=document.getElementById('slkSt'),f=document.getElementById('slkF');if(o)o.innerHTML='';if(s)s.textContent='';if(f)f.value=''};
 window.pgSlik=function(){
