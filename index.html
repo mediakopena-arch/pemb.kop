@@ -1262,7 +1262,7 @@ function doUpload(){
       document.getElementById('upMsg').innerHTML+=rw.map(r=>`<div class="notif ok" style="display:block;margin-top:8px">\uD83D\uDCC8 <b>${esc(r.cabang)} ${esc(r.nama)}</b> vs upload sebelumnya: ${ringkasDiff(r)}</div>`).join('')+'<p class="mut" style="margin-top:6px">Detail: menu <b>Riwayat Mingguan</b>.</p>';
       document.getElementById('upMsg').innerHTML+='<div class="notif ok" style="display:block;margin-top:8px">'+esc(arsipMsg)+'</div>';
       notify('Data berhasil diupload \u2714');
-      syncPush('data',true);
+      syncPush('data',true).then(()=>syncPush('riwayat',true));
     }catch(err){document.getElementById('upMsg').innerHTML=`<div class="notif bad">\u2716 Gagal: ${esc(err.message)}</div>`}
   };
   rd.readAsText(f);
@@ -1826,6 +1826,13 @@ async function syncPull(manual){
     if(Array.isArray(j.users)){users=j.users;jsave(K.users,users)}
     if(full&&j.aomap&&typeof j.aomap==='object'&&!QF.aomap){AOMAP=j.aomap;jsave(K.aomap,AOMAP)}
     if(full&&Array.isArray(j.cabangs)&&j.cabangs.length&&!QF.cabangs){CABANGS=j.cabangs;jsave(KCAB,CABANGS)}
+    if(full&&Array.isArray(j.riwayat)&&!QF.riwayat){
+      const rm={};
+      j.riwayat.filter(r=>r&&r.cabang&&r.tgl&&r.s&&(syncScope()==='all'||r.cabang===syncScope())).forEach(r=>{rm[r.cabang+'|'+r.tgl]=r});
+      RIWAYAT.forEach(r=>{rm[r.cabang+'|'+r.tgl]=r});   /* versi lokal (lengkap dengan rincian perubahan) diutamakan */
+      RIWAYAT=Object.values(rm).sort((a,b)=>a.tgl<b.tgl?-1:a.tgl>b.tgl?1:0).slice(-80);
+      jsave(KRW,RIWAYAT,true);
+    }
     SYNC_INFO=j.updatedAt;
     if(manual||!pageKeep(PAGE))go(PAGE||'home');else pageRefresh(PAGE);
     if(manual)notify('Sinkronisasi berhasil \u2714 data terbaru dimuat');
@@ -1840,6 +1847,7 @@ async function syncPush(kind,quiet,bg){
   else if(kind==='users'){return}  /* akun kini dikelola langsung di server */
   else if(kind==='aomap'){if(syncScope()!=='all'){if(!quiet)notify('Hanya akun Pusat',false);return}records=AOMAP;msg='pemetaan AO'}
   else if(kind==='cabangs'){records=CABANGS;msg='daftar cabang'}
+  else if(kind==='riwayat'){records=RIWAYAT.filter(r=>syncScope()==='all'||r.cabang===syncScope()).map(r=>({id:r.id,tgl:r.tgl,cabang:r.cabang,nama:r.nama,s:r.s}));msg='riwayat upload '+records.length+' entri'}
   const snap=sentSnap(kind);
   if(QF_KINDS.includes(kind)){QF[kind]=1;jsave(KQF,QF,true)}
   qBar();
@@ -2768,10 +2776,17 @@ function snapVal(sn,aos,f){ /* nilai snapshot untuk seluruh data atau untuk daft
   let t=0;Object.keys(sn.ao||{}).forEach(k=>{if(aos.includes(fx(k)))t+=(sn.ao[k][f]||0)});return t;
 }
 function homeDelta(rows,aos){
+  /* acuan otomatis: data upload terakhir bertanggal <= tgl 1 bulan berjalan (jika tak ada: upload pertama di bulan ini) */
+  const bln=todayISO().slice(0,7),first=bln+'-01';
   const cabs=[...new Set(rows.map(cabOf))];let cur=0,prv=0,n=0,tg='';
-  cabs.forEach(cb=>{const L=RIWAYAT.filter(x=>x.cabang===cb).sort((a,b)=>a.tgl<b.tgl?-1:1);
-    if(L.length>=2){const a=L[L.length-1],b=L[L.length-2];
-      const f=aos?'out':'out';cur+=snapVal(a.s,aos,f)||0;prv+=snapVal(b.s,aos,f)||0;n++;if(a.tgl>tg)tg=a.tgl}});
+  cabs.forEach(cb=>{
+    const L=RIWAYAT.filter(x=>x.cabang===cb).sort((a,b)=>a.tgl<b.tgl?-1:1);
+    const base=L.filter(x=>x.tgl<=first).pop()||L.find(x=>x.tgl.slice(0,7)===bln);
+    if(!base)return;
+    cur+=rows.filter(d=>cabOf(d)===cb).reduce((t,d)=>t+(d.outstanding||0),0);
+    prv+=snapVal(base.s,aos,'out')||0;
+    n++;if(!tg||base.tgl>tg)tg=base.tgl;
+  });
   return n?{d:cur-prv,pct:prv>0?(cur-prv)/prv*100:0,tg}:null;
 }
 function homeTop(){
@@ -2787,9 +2802,9 @@ function homeTop(){
   const dl=homeDelta(rows,aos);
   const mask=v=>HOME_HIDE?'Rp \u2022\u2022\u2022\u2022\u2022\u2022\u2022':rp(v);
   let chip;
-  if(!dl)chip='<span class="hm-chip">Belum ada pembanding (butuh 2 kali upload)</span>';
-  else if(dl.d===0)chip='<span class="hm-chip">\u25AC Tetap \u00B7 dibanding '+esc(fmtTgl(dl.tg))+'</span>';
-  else chip='<span class="hm-chip '+(dl.d>0?'up':'dn')+'">'+(dl.d>0?'\u25B2 Naik ':'\u25BC Turun ')+(HOME_HIDE?'':rp(Math.abs(dl.d))+' ('+Math.abs(dl.pct).toFixed(1).replace('.',',')+'%)')+'</span>';
+  if(!dl)chip='<span class="hm-chip">Belum ada data awal bulan sebagai pembanding</span>';
+  else if(dl.d===0)chip='<span class="hm-chip">\u25AC Tetap \u00B7 sejak awal bulan (data '+esc(fmtTgl(dl.tg))+')</span>';
+  else chip='<span class="hm-chip '+(dl.d>0?'up':'dn')+'">'+(dl.d>0?'\u25B2 Naik ':'\u25BC Turun ')+(HOME_HIDE?'':rp(Math.abs(dl.d))+' ('+Math.abs(dl.pct).toFixed(1).replace('.',',')+'%)')+' \u00B7 sejak '+esc(fmtTgl(dl.tg))+'</span>';
   let sel='';
   if(adm){
     const pusat=myCabang()==='all';
@@ -2912,7 +2927,7 @@ function jsaveLap(){
 }
 
 /* --- antrian kirim: catat apa yang sudah terkirim, kirim ulang otomatis --- */
-const KSENT='kop_terkirim',KQF='kop_antrian',QF_KINDS=['data','aomap','cabangs'];
+const KSENT='kop_terkirim',KQF='kop_antrian',QF_KINDS=['data','aomap','cabangs','riwayat'];
 let SENT=jload(KSENT,{});if(!SENT||typeof SENT!=='object')SENT={};
 SENT.laporan=SENT.laporan||{};SENT.pencairan=SENT.pencairan||{};
 let QF=jload(KQF,{});if(!QF||typeof QF!=='object')QF={};
