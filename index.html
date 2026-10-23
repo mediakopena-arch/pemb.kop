@@ -1783,18 +1783,32 @@ const SYNC_URL='https://script.google.com/macros/s/AKfycbwkK44P8Alh3Q6VQC4_UsREW
 async function apiCall(aksi,extra){
   if(!SYNC_URL)return {ok:false,error:'URL server belum diisi (SYNC_URL)'};
   try{
-    const res=await fetch(SYNC_URL,{method:'POST',body:JSON.stringify(Object.assign({aksi,token:TOKEN},extra||{}))});
+    const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),120000);
+    let res;try{res=await fetch(SYNC_URL,{method:'POST',body:JSON.stringify(Object.assign({aksi,token:TOKEN},extra||{})),signal:ctl.signal})}finally{clearTimeout(tm)}
     const j=await res.json();
     if(j&&j.error==='sesi_habis'){sesiBerakhir();return {ok:false,error:'Sesi berakhir'}}
     if(j&&j.error==='wajib_ganti'){setTimeout(()=>gantiPassword(true),50);return {ok:false,error:'Password wajib diganti dulu'}}
     return j||{ok:false,error:'respons kosong'};
-  }catch(err){return {ok:false,error:'tidak terhubung: '+err.message}}
+  }catch(err){return {ok:false,error:'tidak terhubung: '+(err&&err.name==='AbortError'?'waktu habis (server terlalu lama)':err.message)}}
 }
 const SYNC_FOTO=false;
 let SYNC_INFO=null;
 function syncScope(){return (SES&&SES.cabang)||'all'}
 async function syncGet(){return await apiCall('pull')}
+const LAST_ERR={};
 async function syncSend(kind,records){
+  if(kind==='data'&&Array.isArray(records)){
+    const by={};records.forEach(r=>{const c=cabOf(r)||'';(by[c]=by[c]||[]).push(r)});
+    const cs=Object.keys(by);
+    if(!cs.length)return {ok:true,res:{ok:true}};
+    for(const c of cs){
+      let j,coba=0;
+      do{j=await apiCall('kirim',{kind:'data',cab:c,records:by[c]});coba++}
+      while(!(j&&j.ok)&&coba<3&&/tidak terhubung|galat server/.test((j&&j.error)||''));
+      if(!(j&&j.ok))return {ok:false,error:'cabang '+c+': '+((j&&j.error)||'server menjawab tidak dikenali')};
+    }
+    return {ok:true,res:{ok:true}};
+  }
   const j=await apiCall('kirim',{kind,records});
   if(j&&j.ok)return {ok:true,res:j};
   return {ok:false,error:(j&&j.error)||'server menjawab tidak dikenali'};
@@ -1852,6 +1866,7 @@ async function syncPush(kind,quiet,bg){
   if(QF_KINDS.includes(kind)){QF[kind]=1;jsave(KQF,QF,true)}
   qBar();
   const r=await syncSend(kind,records);
+  LAST_ERR[kind]=r.ok?'':r.error;
   if(r.ok){sentCommit(kind,snap);if(QF[kind]){delete QF[kind];jsave(KQF,QF,true)}}
   if(!bg){
     if(r.ok){if(!quiet)notify('\u2713 Terkirim ke server: '+msg,true)}
@@ -2966,9 +2981,9 @@ async function flushQueue(manual){
     if(u.laporan)kinds.push('laporan');
     if(u.pencairan)kinds.push('pencairan');
     QF_KINDS.forEach(k=>{if(QF[k])kinds.push(k)});
-    let gagal=false;
-    for(const k of kinds){const ok=await syncPush(k,true,true);if(!ok){gagal=true;break}}
-    if(manual)notify(!kinds.length?'Semua data sudah terkirim \u2714':gagal?'Belum berhasil terkirim \u2014 cek sinyal internet lalu coba lagi':'Semua data terkirim ke server \u2714',!gagal);
+    let gagal=false,galat='';
+    for(const k of kinds){const ok=await syncPush(k,true,true);if(!ok){gagal=true;galat=(galat?galat+'; ':'')+k+': '+(LAST_ERR[k]||'gagal')}}
+    if(manual)notify(!kinds.length?'Semua data sudah terkirim \u2714':gagal?'Belum berhasil terkirim ('+galat+')'+(/tidak terhubung/i.test(galat)?' \u2014 cek sinyal internet lalu coba lagi':''):'Semua data terkirim ke server \u2714',!gagal);
   }finally{_flushing=false;hitungLs();qBar()}
 }
 
