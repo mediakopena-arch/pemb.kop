@@ -2853,6 +2853,153 @@ function homeGrid(){
   return homeTop()+'<div class="hm-grid">'+tiles+'</div>';
 }
 
+/* ================= BUKU RIWAYAT NASABAH =================
+   Menampilkan seluruh nasabah (sesuai hak akses) + profil/alamat + seluruh laporan harian per rekening.
+   Profil (alamat, HP, usaha, catatan) disimpan di HP pada kunci 'kop_profil' (belum ikut sinkronisasi server). */
+ICO.riw='M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z M4 19V5 M8 7h7 M8 11h5 M17 21h2';
+HOME_ICON.riw={tint:'#efe4ff',svg:hiSvg(hiG('hr1','#a98bf0','#6d3fd1')+hiG('hr2','#ffffff','#e6dcf8')+hiG('hr3','#ffe08a','#f0a92e'),
+  '<rect x="12" y="8" width="40" height="48" rx="7" fill="url(#hr1)"/><rect x="18" y="8" width="34" height="44" rx="4" fill="url(#hr2)"/>'
+  +'<rect x="23" y="16" width="20" height="3.5" rx="1.7" fill="#c9b8ee"/><rect x="23" y="24" width="24" height="3.5" rx="1.7" fill="#c9b8ee"/><rect x="23" y="32" width="16" height="3.5" rx="1.7" fill="#c9b8ee"/>'
+  +'<rect x="38" y="6" width="9" height="20" rx="2" fill="url(#hr3)"/><ellipse cx="22" cy="12" rx="8" ry="2.4" fill="#fff" opacity=".3" transform="rotate(-18 22 12)"/>')};
+(function(){const i=PAGES.findIndex(p=>p.id==='lap');
+  PAGES.splice(i+1,0,{id:'riw',t:'\uD83D\uDCD6 Buku Riwayat Nasabah',fn:()=>pgRiw(),keep:true,refresh:()=>{if(typeof riwRender==='function'&&RIW.rek===null)riwRender()}})})();
+
+const KPROF='kop_profil';
+let PROF=jload(KPROF,{});if(!PROF||typeof PROF!=='object')PROF={};
+const RIW={rek:null,lim:50};
+function riwLapMap(){const m={};LAP.forEach(l=>{(m[l.rekening]=m[l.rekening]||[]).push(l)});
+  Object.values(m).forEach(a=>a.sort((x,y)=>(y.tanggalISO||'').localeCompare(x.tanggalISO||'')||(y.id-x.id)));return m}
+const riwBadge=h=>{h=h||'';return /membayar|bertemu/i.test(h)?'b1':/janji/i.test(h)?'b2':/belum janji/i.test(h)?'b3':'b4'};
+const riwIsVisit=l=>/^visit/i.test(l.hasil||'');
+function pgRiw(){
+  RIW.rek=null;RIW.lim=50;
+  const aos=[...new Set(myData().map(d=>d.ao).filter(Boolean))].sort();
+  document.getElementById('content').innerHTML=`
+  <div id="riwCards"></div>
+  <div class="panel"><h3>\uD83D\uDCD6 Buku Riwayat Nasabah</h3>
+    <p class="mut" style="margin-bottom:10px">Ketuk nama nasabah untuk melihat alamat, data pembiayaan, dan seluruh laporan kunjungan/call dari Laporan Harian.</p>
+    <div class="toolbar">
+      <input id="riwQ" placeholder="cari nama / rekening / alamat..." oninput="RIW.lim=50;riwRender()">
+      <select id="riwF" onchange="RIW.lim=50;riwRender()">
+        <option value="">Semua nasabah</option><option value="visit">Pernah dikunjungi</option><option value="nol">Belum pernah dilaporkan</option>
+        <option value="belum">Belum angsur</option><option value="janji">Terakhir: janji bayar</option><option value="noalamat">Alamat belum diisi</option></select>
+      ${isAdmin()?`<select id="riwAo" onchange="RIW.lim=50;riwRender()"><option value="">Semua AO</option>${aos.map(a=>`<option>${esc(a)}</option>`).join('')}</select>`:''}
+      <button class="btn-a" onclick="riwExportCsv()">\u2B07\uFE0F CSV</button>
+    </div>
+    <div id="riwList"></div>
+  </div>`;
+  riwRender();
+}
+function riwRows(){
+  const q=(document.getElementById('riwQ')?.value||'').toLowerCase().trim(),f=document.getElementById('riwF')?.value||'',ao=document.getElementById('riwAo')?.value||'';
+  const lm=riwLapMap();
+  let r=myData().filter(d=>{
+    const p=PROF[d.rekening]||{},ls=lm[d.rekening]||[];
+    if(ao&&d.ao!==ao)return false;
+    if(q&&!(String(d.nama).toLowerCase().includes(q)||String(d.rekening).includes(q)||String(p.alamat||'').toLowerCase().includes(q)))return false;
+    if(f==='visit'&&!ls.some(riwIsVisit))return false;
+    if(f==='nol'&&ls.length)return false;
+    if(f==='belum'&&d.sudah_angsur)return false;
+    if(f==='janji'&&!(ls[0]&&ls[0].hasil==='Janji bayar'))return false;
+    if(f==='noalamat'&&p.alamat)return false;
+    return true;
+  });
+  r.sort((a,b)=>String(a.nama).localeCompare(String(b.nama)));
+  return {r,lm};
+}
+function riwRender(){
+  const box=document.getElementById('riwList');if(!box)return;
+  const {r,lm}=riwRows();
+  const all=myData(),nLap=all.filter(d=>(lm[d.rekening]||[]).length).length;
+  const cd=document.getElementById('riwCards');
+  if(cd)cd.innerHTML=`<div class="cards"><div class="card"><h4>Total Nasabah</h4><div class="v">${all.length.toLocaleString('id-ID')}</div><div class="s">sesuai hak akses Anda</div></div>
+   <div class="card"><h4>Sudah Ada Riwayat</h4><div class="v" style="color:var(--blue)">${nLap.toLocaleString('id-ID')}</div><div class="s">punya laporan harian</div></div>
+   <div class="card"><h4>Belum Pernah Dilaporkan</h4><div class="v" style="color:var(--red)">${(all.length-nLap).toLocaleString('id-ID')}</div><div class="s">perlu dihubungi</div></div></div>`;
+  if(!r.length){box.innerHTML='<p class="mut">Tidak ada nasabah untuk filter ini.</p>';return}
+  const show=r.slice(0,RIW.lim);
+  box.innerHTML=`<p class="mut" style="margin-bottom:8px">Menampilkan ${show.length} dari ${r.length.toLocaleString('id-ID')} nasabah</p>
+   ${show.map(d=>{const ls=lm[d.rekening]||[],p=PROF[d.rekening]||{},lc=ls[0],nv=ls.filter(riwIsVisit).length;
+     return `<div data-rek="${esc(d.rekening)}" onclick="riwOpen(this.dataset.rek)" style="cursor:pointer;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div style="min-width:0"><b style="color:var(--p);font-size:15px;word-break:break-word">${esc(d.nama)}</b><div class="mut">${esc(d.rekening)}</div></div>
+        <span class="badge ${collClass(collOf(d))}">${collLabel(collOf(d))}</span></div>
+      <div style="margin-top:8px;font-size:13px;word-break:break-word">\uD83D\uDCCD ${p.alamat?esc(p.alamat):'<span class="mut">alamat belum diisi</span>'}${p.hp?' \u00B7 \uD83D\uDCDE '+esc(p.hp):''}</div>
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:13px"><span class="mut">AO: ${esc(d.ao)}</span><b>${rp(d.outstanding)}</b></div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:12.5px">${ls.length?`<b>${ls.length}</b> laporan${nv?' \u00B7 '+nv+' visit':''} \u00B7 terakhir ${esc(lc.tanggal)} <span class="badge ${riwBadge(lc.hasil)}">${esc(lc.hasil)}</span>`:'<span class="mut">Belum ada laporan harian</span>'}</div></div>`}).join('')}
+   ${r.length>show.length?`<button class="btn-s" style="width:100%;margin-top:4px" onclick="RIW.lim+=50;riwRender()">Tampilkan ${Math.min(50,r.length-show.length)} lagi\u2026</button>`:''}`;
+}
+function riwOpen(rek){
+  const d=myData().find(x=>String(x.rekening)===String(rek));if(!d){notify('Nasabah tidak ditemukan',false);return}
+  RIW.rek=String(rek);
+  const ls=(riwLapMap()[d.rekening]||[]),p=PROF[d.rekening]||{};
+  const nv=ls.filter(riwIsVisit).length,tot=ls.reduce((a,l)=>a+(+l.nominal||0),0);
+  const row=(k,v)=>`<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px"><span class="mut">${k}</span><b style="text-align:right">${v}</b></div>`;
+  document.getElementById('content').innerHTML=`
+  <button class="btn-s" style="margin-bottom:12px" onclick="pgRiw()">\u2190 Kembali ke daftar</button>
+  <div class="panel"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start">
+    <div><h3 style="margin:0">${esc(d.nama)}</h3><div class="mut">Rek. ${esc(d.rekening)} \u00B7 ${esc(d.kode)} \u2014 ${esc(d.produk)}</div></div>
+    <div><span class="badge ${collClass(collOf(d))}">${collLabel(collOf(d))}</span> <span class="badge ${d.sudah_angsur?'b1':'b4'}">${d.sudah_angsur?'Sudah angsur':'Belum angsur'}</span></div></div>
+    <button class="btn-a" style="margin-top:12px" onclick="riwCetak('${esc(d.rekening)}')">\uD83D\uDDA8\uFE0F Cetak / PDF</button></div>
+  <div class="panel"><h3>\uD83D\uDCCD Alamat & Kontak</h3><div id="riwProf">
+    ${row('Alamat',p.alamat?esc(p.alamat):'<span class="mut">belum diisi</span>')}
+    ${row('No. HP',p.hp?'<a href="tel:'+esc(p.hp)+'" style="color:var(--p)">'+esc(p.hp)+'</a>':'<span class="mut">belum diisi</span>')}
+    ${row('Usaha / Pekerjaan',p.usaha?esc(p.usaha):'<span class="mut">belum diisi</span>')}
+    ${row('Catatan khusus',p.ket?esc(p.ket):'<span class="mut">-</span>')}
+    <button class="btn-s" style="margin-top:12px" onclick="riwEditProf()">\u270F\uFE0F ${p.alamat||p.hp?'Ubah':'Isi'} data</button></div></div>
+  <div class="panel"><h3>\uD83D\uDCB0 Data Pembiayaan</h3>
+    ${row('Plafond',rp(d.plafond))}${row('Outstanding',rp(d.outstanding))}${row('Tunggakan pokok',rp(d.tak_pokok>0?d.tak_pokok:0))}
+    ${row('Tunggakan (bulan)',esc(d.tak_bln||0))}${row('Jatuh tempo',esc(d.tgl_jt||'-'))}${row('AO',esc(d.ao))}
+    ${row('Cabang',esc(cabOf(d)))}</div>
+  <div class="panel"><h3>\uD83D\uDCCB Riwayat Laporan Harian</h3>
+    <div class="cards" style="margin-bottom:14px"><div class="card"><h4>Total Laporan</h4><div class="v">${ls.length}</div></div>
+    <div class="card"><h4>Kunjungan (Visit)</h4><div class="v" style="color:var(--blue)">${nv}</div></div>
+    <div class="card"><h4>Total Nominal Dilaporkan</h4><div class="v">${rpS(tot)}</div></div></div>
+    ${ls.length?ls.map(l=>`<div style="border-left:3px solid var(--p);background:#f8fbfa;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>${esc(l.tanggal)}</b><span class="badge ${riwBadge(l.hasil)}">${esc(l.hasil)}</span></div>
+      ${l.nominal?`<div style="margin-top:4px">Nominal: <b>${rp(l.nominal)}</b></div>`:''}
+      ${l.catatan?`<div style="margin-top:4px;font-size:13px">${esc(l.catatan)}</div>`:''}
+      ${l.foto?`<img src="${l.foto}" style="max-height:110px;border-radius:8px;border:1px solid var(--line);margin-top:6px;display:block">`:''}
+      <div class="mut" style="margin-top:5px">Petugas: ${esc(l.petugas)}${l.lokasi?' \u00B7 <a style="color:var(--p)" target="_blank" rel="noopener" href="https://maps.google.com/?q='+encodeURIComponent(l.lokasi.lat+','+l.lokasi.lng)+'">\uD83D\uDCCD lihat lokasi</a>':''}${l.waktuFoto?' \u00B7 \uD83D\uDD52 '+new Date(l.waktuFoto).toLocaleString('id-ID'):''}</div></div>`).join('')
+      :'<p class="mut">Belum ada laporan harian untuk nasabah ini.</p>'}</div>`;
+  window.scrollTo(0,0);
+}
+function riwEditProf(){
+  const p=PROF[RIW.rek]||{};
+  document.getElementById('riwProf').innerHTML=`
+   <label>Alamat lengkap</label><textarea id="rpAl" rows="2">${esc(p.alamat||'')}</textarea>
+   <label>No. HP</label><input id="rpHp" inputmode="tel" value="${esc(p.hp||'')}">
+   <label>Usaha / Pekerjaan</label><input id="rpUs" value="${esc(p.usaha||'')}">
+   <label>Catatan khusus</label><textarea id="rpKet" rows="2">${esc(p.ket||'')}</textarea>
+   <div style="display:flex;gap:10px;margin-top:12px"><button class="btn-p" style="margin:0" onclick="riwSimpanProf()">Simpan</button><button class="btn-s" onclick="riwOpen(RIW.rek)">Batal</button></div>`;
+}
+function riwSimpanProf(){
+  const g=id=>document.getElementById(id).value.trim();
+  PROF[RIW.rek]={alamat:g('rpAl'),hp:g('rpHp'),usaha:g('rpUs'),ket:g('rpKet'),upd:Date.now()};
+  jsave(KPROF,PROF);notify('Data nasabah tersimpan \u2714');riwOpen(RIW.rek);
+}
+function riwCetak(rek){
+  const d=myData().find(x=>String(x.rekening)===String(rek));if(!d)return;
+  const ls=riwLapMap()[d.rekening]||[],p=PROF[d.rekening]||{};
+  printInit('Buku Riwayat Nasabah \u2014 KOPENA','Dicetak '+new Date().toLocaleString('id-ID'));
+  document.getElementById('printArea').innerHTML+=`<table>
+   <tr><th>Nama</th><td>${esc(d.nama)}</td><th>Rekening</th><td>${esc(d.rekening)}</td></tr>
+   <tr><th>Produk</th><td>${esc(d.produk)}</td><th>AO</th><td>${esc(d.ao)}</td></tr>
+   <tr><th>Alamat</th><td colspan="3">${esc(p.alamat||'-')}</td></tr>
+   <tr><th>No. HP</th><td>${esc(p.hp||'-')}</td><th>Usaha</th><td>${esc(p.usaha||'-')}</td></tr>
+   <tr><th>Plafond</th><td>${rp(d.plafond)}</td><th>Outstanding</th><td>${rp(d.outstanding)}</td></tr>
+   <tr><th>Kolektibilitas</th><td>${collLabel(collOf(d))}</td><th>Jatuh tempo</th><td>${esc(d.tgl_jt||'-')}</td></tr></table>
+   <h2>Riwayat Laporan (${ls.length})</h2>`+lapTableHtml(ls);
+  window.print();
+}
+function riwExportCsv(){
+  const {r,lm}=riwRows(),q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';
+  let csv='\uFEFFRekening;Nama;Alamat;No HP;Usaha;AO;Plafond;Outstanding;Kolektibilitas;Jumlah Laporan;Jumlah Visit;Laporan Terakhir;Hasil Terakhir\n';
+  r.forEach(d=>{const p=PROF[d.rekening]||{},ls=lm[d.rekening]||[],lc=ls[0];
+    csv+=[q("'"+d.rekening),q(d.nama),q(p.alamat),q(p.hp),q(p.usaha),q(d.ao),d.plafond||0,d.outstanding||0,q(collLabel(collOf(d))),ls.length,ls.filter(riwIsVisit).length,q(lc?lc.tanggal:''),q(lc?lc.hasil:'')].join(';')+'\n'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download='buku-riwayat-nasabah.csv';document.body.appendChild(a);a.click();a.remove();
+}
+
 /* ================= PENYIMPANAN AMAN & ANTRIAN KIRIM ================= */
 /* --- peringatan & ukuran penyimpanan --- */
 let _lsPct=0,_warned=false;
