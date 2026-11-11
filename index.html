@@ -2881,7 +2881,7 @@ function pgRiw(){
     <div class="toolbar">
       <input id="riwQ" placeholder="cari nama / rekening / alamat..." oninput="RIW.lim=50;riwRender()">
       <select id="riwF" onchange="RIW.lim=50;riwRender()">
-        <option value="">Semua nasabah</option><option value="visit">Pernah dikunjungi</option><option value="nol">Belum pernah dilaporkan</option>
+        <option value="">Semua nasabah</option><option value="ada">Sudah ada riwayat</option><option value="visit">Pernah dikunjungi</option><option value="nol">Belum pernah dilaporkan</option>
         <option value="belum">Belum angsur</option><option value="janji">Terakhir: janji bayar</option><option value="noalamat">Alamat belum diisi</option></select>
       ${isAdmin()?`<select id="riwAo" onchange="RIW.lim=50;riwRender()"><option value="">Semua AO</option>${aos.map(a=>`<option>${esc(a)}</option>`).join('')}</select>`:''}
       <button class="btn-a" onclick="riwExportCsv()">\u2B07\uFE0F CSV</button>
@@ -2899,6 +2899,7 @@ function riwRows(){
     if(q&&!(String(d.nama).toLowerCase().includes(q)||String(d.rekening).includes(q)||String(p.alamat||'').toLowerCase().includes(q)))return false;
     if(f==='visit'&&!ls.some(riwIsVisit))return false;
     if(f==='nol'&&ls.length)return false;
+    if(f==='ada'&&!ls.length)return false;
     if(f==='belum'&&d.sudah_angsur)return false;
     if(f==='janji'&&!(ls[0]&&ls[0].hasil==='Janji bayar'))return false;
     if(f==='noalamat'&&p.alamat)return false;
@@ -2907,14 +2908,32 @@ function riwRows(){
   r.sort((a,b)=>String(a.nama).localeCompare(String(b.nama)));
   return {r,lm};
 }
+function riwTile(k){
+  const sel=document.getElementById('riwF');if(sel)sel.value=k;
+  RIW.lim=50;riwRender();
+  const el=document.getElementById('riwList');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+}
 function riwRender(){
   const box=document.getElementById('riwList');if(!box)return;
   const {r,lm}=riwRows();
   const all=myData(),nLap=all.filter(d=>(lm[d.rekening]||[]).length).length;
   const cd=document.getElementById('riwCards');
-  if(cd)cd.innerHTML=`<div class="cards"><div class="card"><h4>Total Nasabah</h4><div class="v">${all.length.toLocaleString('id-ID')}</div><div class="s">sesuai hak akses Anda</div></div>
-   <div class="card"><h4>Sudah Ada Riwayat</h4><div class="v" style="color:var(--blue)">${nLap.toLocaleString('id-ID')}</div><div class="s">punya laporan harian</div></div>
-   <div class="card"><h4>Belum Pernah Dilaporkan</h4><div class="v" style="color:var(--red)">${(all.length-nLap).toLocaleString('id-ID')}</div><div class="s">perlu dihubungi</div></div></div>`;
+  if(cd){
+    const cur=document.getElementById('riwF')?.value||'';
+    const T=[{k:'',l:'Total Nasabah',v:all.length,c:'#0e6e5d',t:'#dff3ee',sh:'#0a4f43',sub:'semua nasabah'},
+             {k:'ada',l:'Sudah Ada Riwayat',v:nLap,c:'#2563eb',t:'#e0ecff',sh:'#1b4aa8',sub:'punya laporan'},
+             {k:'nol',l:'Belum Dilaporkan',v:all.length-nLap,c:'#c0392b',t:'#ffe6e1',sh:'#8e2a20',sub:'perlu dihubungi'}];
+    cd.innerHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;padding-bottom:8px">'+T.map(x=>{
+      const on=cur===x.k;
+      return '<div role="button" tabindex="0" onclick="riwTile(\''+x.k+'\')" style="cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;text-align:center;border-radius:16px;padding:12px 4px 10px;'
+       +'background:linear-gradient(160deg,#fff 0%,'+x.t+' 100%);border:1px solid rgba(255,255,255,.95);'
+       +(on?'outline:2.5px solid '+x.c+';transform:translateY(4px);box-shadow:0 2px 0 '+x.sh+',0 5px 8px -4px rgba(0,0,0,.35),inset 0 2px 0 #fff;'
+          :'transform:translateY(0);box-shadow:0 6px 0 '+x.sh+',0 14px 16px -8px rgba(0,0,0,.4),inset 0 2px 0 #fff,inset 0 -6px 10px rgba(0,0,0,.05);')
+       +'transition:transform .12s,box-shadow .12s">'
+       +'<div style="font-size:10.5px;font-weight:700;color:var(--mut);text-transform:uppercase;line-height:1.2;min-height:25px;display:flex;align-items:center;justify-content:center;padding:0 2px">'+x.l+'</div>'
+       +'<div style="font-size:28px;font-weight:800;color:'+x.c+';margin:4px 0 2px;text-shadow:0 2px 0 rgba(255,255,255,.9),0 3px 3px rgba(0,0,0,.18)">'+x.v.toLocaleString('id-ID')+'</div>'
+       +'<div style="font-size:10px;color:var(--mut)">'+x.sub+'</div></div>'}).join('')+'</div>';
+  }
   if(!r.length){box.innerHTML='<p class="mut">Tidak ada nasabah untuk filter ini.</p>';return}
   const show=r.slice(0,RIW.lim);
   box.innerHTML=`<p class="mut" style="margin-bottom:8px">Menampilkan ${show.length} dari ${r.length.toLocaleString('id-ID')} nasabah</p>
