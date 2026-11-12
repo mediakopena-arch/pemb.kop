@@ -436,6 +436,8 @@ if(!localStorage.getItem(K.users)) jsave(K.users,[]);
 if(!localStorage.getItem(K.data)) jsave(K.data,SAMPLE_DATA);
 if(!localStorage.getItem(K.lap)) jsave(K.lap,[]);
 let users=jload(K.users,[]), DATA=jload(K.data,[]), LAP=jload(K.lap,[]), SES=jload(K.ses,null);
+const KLDEL='kop_lap_hapus';
+let LAPDEL=jload(KLDEL,[]);if(!Array.isArray(LAPDEL))LAPDEL=[];   /* catatan laporan yang dihapus (agar penghapusan ikut tersinkron ke server & HP lain) */
 const NAME_FIX={'DIMAS RIZKI PUTRA SULISTIO':'DIMAS RIZKI PUTRA SULISTYO'};
 const fx=n=>NAME_FIX[String(n||'').trim().toUpperCase()]||n;
 function fixNames(){
@@ -901,7 +903,16 @@ function saveLap(){
   document.getElementById('lpCat').value='';document.getElementById('lpNom').value=0;
   pgLap();
 }
-function delLap(id){if(confirm('Hapus laporan ini?')){LAP=LAP.filter(l=>l.id!==id);jsaveLap();if(FOTO_OK){fotoDel(String(id)).catch(()=>{});FOTO_SAVED.delete(String(id))}renderLapList()}}
+function delLap(id){
+  if(!confirm('Hapus laporan ini?'))return;
+  const l=LAP.find(x=>x.id===id);
+  if(l&&!LAPDEL.some(t=>String(t.id)===String(id)))LAPDEL.push({id:l.id,rekening:l.rekening,petugas:l.petugas,ao:l.ao,dihapus:true,upd:Date.now()});
+  jsave(KLDEL,LAPDEL,true);
+  LAP=LAP.filter(x=>x.id!==id);jsaveLap();
+  if(FOTO_OK){fotoDel(String(id)).catch(()=>{});FOTO_SAVED.delete(String(id))}
+  renderLapList();
+  syncPush('laporan',true);
+}
 function renderLapList(){
   fixNames();
   const t=document.getElementById('fTgl')?.value,q=(document.getElementById('fQ')?.value||'').toLowerCase();
@@ -1833,9 +1844,14 @@ async function syncPull(manual){
       j.pencairan.forEach(r=>{const x=m[r.id];if(x&&(x.upd||0)===(r.upd||0))SENT.pencairan[r.id]=r.upd||0});jsave(KSENT,SENT,true);
     }
     if(Array.isArray(j.laporan)){
-      const map={};LAP.forEach(l=>map[l.id]=l);j.laporan.forEach(l=>{const o=map[l.id];map[l.id]=(o&&o.foto&&!l.foto)?Object.assign({},l,{foto:o.foto}):l;if(o&&o.fotoId&&!l.fotoId)map[l.id].fotoId=o.fotoId});
+      const gone=new Set(LAPDEL.map(t=>String(t.id)));
+      j.laporan.forEach(l=>{if(l.dihapus){gone.add(String(l.id));if(!LAPDEL.some(t=>String(t.id)===String(l.id)))LAPDEL.push({id:l.id,rekening:l.rekening,petugas:l.petugas,ao:l.ao,dihapus:true,upd:l.upd||Date.now()});SENT.laporan[l.id]=3}});
+      jsave(KLDEL,LAPDEL,true);
+      const map={};LAP.forEach(l=>{if(!gone.has(String(l.id)))map[l.id]=l});
+      j.laporan.forEach(l=>{if(l.dihapus||gone.has(String(l.id)))return;const o=map[l.id];map[l.id]=(o&&o.foto&&!l.foto)?Object.assign({},l,{foto:o.foto}):l;if(o&&o.fotoId&&!l.fotoId)map[l.id].fotoId=o.fotoId});
       LAP=Object.values(map);jsaveLap();
-      j.laporan.forEach(l=>{SENT.laporan[l.id]=l.fotoId?2:1});jsave(KSENT,SENT,true);
+      if(FOTO_OK)gone.forEach(id=>{fotoDel(id).catch(()=>{});FOTO_SAVED.delete(id)});
+      j.laporan.forEach(l=>{if(!l.dihapus&&!gone.has(String(l.id)))SENT.laporan[l.id]=l.fotoId?2:1});jsave(KSENT,SENT,true);
     }
     if(Array.isArray(j.users)){users=j.users;jsave(K.users,users)}
     if(full&&j.aomap&&typeof j.aomap==='object'&&!QF.aomap){AOMAP=j.aomap;jsave(K.aomap,AOMAP)}
@@ -1874,7 +1890,7 @@ async function syncPush(kind,quiet,bg){
   if(!SYNC_URL){if(!quiet)notify('URL server belum diisi (SYNC_URL)',false);return}
   let records,msg;
   if(kind==='data'){records=syncScope()==='all'?DATA:DATA.filter(inCabang);msg='data '+records.length+' rekening'+(syncScope()==='all'?' (semua cabang)':' cabang '+syncScope())}
-  else if(kind==='laporan'){await uploadFoto();records=SYNC_FOTO?LAP:LAP.map(l=>l.foto?Object.assign({},l,{foto:null,fotoAda:true}):l);msg='laporan '+records.length+' catatan'}
+  else if(kind==='laporan'){await uploadFoto();records=(SYNC_FOTO?LAP:LAP.map(l=>l.foto?Object.assign({},l,{foto:null,fotoAda:true}):l)).concat(LAPDEL);msg='laporan '+records.length+' catatan'}
   else if(kind==='pencairan'){records=PENC;msg='pencairan '+records.length+' catatan'}
   else if(kind==='users'){return}  /* akun kini dikelola langsung di server */
   else if(kind==='aomap'){if(syncScope()!=='all'){if(!quiet)notify('Hanya akun Pusat',false);return}records=AOMAP;msg='pemetaan AO'}
@@ -3131,7 +3147,7 @@ let SENT=jload(KSENT,{});if(!SENT||typeof SENT!=='object')SENT={};
 SENT.laporan=SENT.laporan||{};SENT.pencairan=SENT.pencairan||{};
 let QF=jload(KQF,{});if(!QF||typeof QF!=='object')QF={};
 function sentSnap(kind){
-  if(kind==='laporan')return LAP.map(l=>[l.id,lapSt(l)]);
+  if(kind==='laporan')return LAP.map(l=>[l.id,lapSt(l)]).concat(LAPDEL.map(t=>[t.id,3]));
   if(kind==='pencairan')return PENC.map(r=>[r.id,r.upd||0]);
   return null;
 }
@@ -3144,6 +3160,7 @@ function sentCommit(kind,snap){
 function qUnsent(){
   const n={laporan:0,pencairan:0};
   LAP.forEach(l=>{if(lapSt(l)===0||SENT.laporan[l.id]!==lapSt(l))n.laporan++});
+  LAPDEL.forEach(t=>{if(SENT.laporan[t.id]!==3)n.laporan++});
   PENC.forEach(r=>{if(SENT.pencairan[r.id]!==(r.upd||0))n.pencairan++});
   return n;
 }
