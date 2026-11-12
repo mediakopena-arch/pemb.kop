@@ -912,7 +912,7 @@ function renderLapList(){
    <tr><th>Tanggal</th><th>Rekening</th><th>Nasabah</th><th>Hasil Call</th><th class="r">Nominal</th><th>Foto & Lokasi</th><th>Petugas</th><th></th></tr>
    ${rows.map(l=>`<tr><td>${esc(l.tanggal)}</td><td>${esc(l.rekening)}</td><td>${esc(l.nama)}</td>
      <td>${esc(l.hasil)}${l.catatan?`<br><span class='mut'>${esc(l.catatan)}</span>`:''}</td><td class="num">${l.nominal?rp(l.nominal):'-'}</td>
-     <td>${l.foto?`<img src="${l.foto}" style="max-height:46px;border-radius:6px;border:1px solid var(--line)"><br>`:'<span class="mut">tanpa foto</span>'}<span class="mut" style="font-size:11px">${metaLap(l)}</span></td><td>${esc(l.petugas)}</td>
+     <td>${l.foto?`<img src="${l.foto}" style="max-height:46px;border-radius:6px;border:1px solid var(--line)"><br>`:l.fotoId?`<button class="btn-s" onclick="lihatFoto('${l.id}')">📷 Lihat</button><br>`:'<span class="mut">tanpa foto</span>'}<span class="mut" style="font-size:11px">${metaLap(l)}</span></td><td>${esc(l.petugas)}</td>
      <td>${(SES.role==='admin'||l.petugas===SES.nama)?`<button class="btn-d" onclick="delLap(${l.id})">\u2715</button>`:''}</td></tr>`).join('')}</table>`
    :'<p class="mut">Belum ada laporan untuk filter ini.</p>';
 }
@@ -1833,9 +1833,9 @@ async function syncPull(manual){
       j.pencairan.forEach(r=>{const x=m[r.id];if(x&&(x.upd||0)===(r.upd||0))SENT.pencairan[r.id]=r.upd||0});jsave(KSENT,SENT,true);
     }
     if(Array.isArray(j.laporan)){
-      const map={};LAP.forEach(l=>map[l.id]=l);j.laporan.forEach(l=>{const o=map[l.id];map[l.id]=(o&&o.foto&&!l.foto)?Object.assign({},l,{foto:o.foto}):l});
+      const map={};LAP.forEach(l=>map[l.id]=l);j.laporan.forEach(l=>{const o=map[l.id];map[l.id]=(o&&o.foto&&!l.foto)?Object.assign({},l,{foto:o.foto}):l;if(o&&o.fotoId&&!l.fotoId)map[l.id].fotoId=o.fotoId});
       LAP=Object.values(map);jsaveLap();
-      j.laporan.forEach(l=>{SENT.laporan[l.id]=1});jsave(KSENT,SENT,true);
+      j.laporan.forEach(l=>{SENT.laporan[l.id]=l.fotoId?2:1});jsave(KSENT,SENT,true);
     }
     if(Array.isArray(j.users)){users=j.users;jsave(K.users,users)}
     if(full&&j.aomap&&typeof j.aomap==='object'&&!QF.aomap){AOMAP=j.aomap;jsave(K.aomap,AOMAP)}
@@ -1852,11 +1852,29 @@ async function syncPull(manual){
     if(manual)notify('Sinkronisasi berhasil \u2714 data terbaru dimuat');
   }catch(err){if(manual)notify('Gagal tarik data: '+err.message,false)}
 }
+
+function lapSt(l){return (l.foto&&!l.fotoId)?0:(l.fotoId?2:1)}
+async function uploadFoto(){
+  for(const l of LAP){ if(l.foto&&!l.fotoId){
+    const j=await apiCall('foto_up',{id:String(l.id),data:l.foto});
+    if(j&&j.ok)l.fotoId=j.fid; else break; } }
+  jsaveLap();
+}
+async function lihatFoto(id){
+  const l=LAP.find(x=>String(x.id)===String(id));if(!l||!l.fotoId)return;
+  notify('Mengambil foto...',true);
+  const j=await apiCall('foto_get',{fid:l.fotoId});
+  if(!j||!j.ok){notify('Gagal ambil foto',false);return}
+  l.foto=j.data;try{FOTO_SAVED.add(String(l.id))}catch(e){}
+  try{fotoPut(String(l.id),j.data).catch(()=>{})}catch(e){}
+  try{renderLapList()}catch(e){}
+  try{if(typeof RIW!=='undefined'&&RIW.rek&&document.querySelector('[onclick="pgRiw()"]'))riwOpen(RIW.rek)}catch(e){}
+}
 async function syncPush(kind,quiet,bg){
   if(!SYNC_URL){if(!quiet)notify('URL server belum diisi (SYNC_URL)',false);return}
   let records,msg;
   if(kind==='data'){records=syncScope()==='all'?DATA:DATA.filter(inCabang);msg='data '+records.length+' rekening'+(syncScope()==='all'?' (semua cabang)':' cabang '+syncScope())}
-  else if(kind==='laporan'){records=SYNC_FOTO?LAP:LAP.map(l=>l.foto?Object.assign({},l,{foto:null,fotoAda:true}):l);msg='laporan '+records.length+' catatan'}
+  else if(kind==='laporan'){await uploadFoto();records=SYNC_FOTO?LAP:LAP.map(l=>l.foto?Object.assign({},l,{foto:null,fotoAda:true}):l);msg='laporan '+records.length+' catatan'}
   else if(kind==='pencairan'){records=PENC;msg='pencairan '+records.length+' catatan'}
   else if(kind==='users'){return}  /* akun kini dikelola langsung di server */
   else if(kind==='aomap'){if(syncScope()!=='all'){if(!quiet)notify('Hanya akun Pusat',false);return}records=AOMAP;msg='pemetaan AO'}
@@ -2977,7 +2995,7 @@ function riwOpen(rek){
       <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>${esc(l.tanggal)}</b><span class="badge ${riwBadge(l.hasil)}">${esc(l.hasil)}</span></div>
       ${l.nominal?`<div style="margin-top:4px">Nominal: <b>${rp(l.nominal)}</b></div>`:''}
       ${l.catatan?`<div style="margin-top:4px;font-size:13px">${esc(l.catatan)}</div>`:''}
-      ${l.foto?`<img src="${l.foto}" style="max-height:110px;border-radius:8px;border:1px solid var(--line);margin-top:6px;display:block">`:''}
+      ${l.foto?`<img src="${l.foto}" style="max-height:110px;border-radius:8px;border:1px solid var(--line);margin-top:6px;display:block">`:l.fotoId?`<button class="btn-s" onclick="lihatFoto('${l.id}')">📷 Lihat foto</button>`:''}
       <div class="mut" style="margin-top:5px">Petugas: ${esc(l.petugas)}${l.lokasi?' \u00B7 <a style="color:var(--p)" target="_blank" rel="noopener" href="https://maps.google.com/?q='+encodeURIComponent(l.lokasi.lat+','+l.lokasi.lng)+'">\uD83D\uDCCD lihat lokasi</a>':''}${l.waktuFoto?' \u00B7 \uD83D\uDD52 '+new Date(l.waktuFoto).toLocaleString('id-ID'):''}</div></div>`).join('')
       :'<p class="mut">Belum ada laporan harian untuk nasabah ini.</p>'}</div>`;
   window.scrollTo(0,0);
@@ -3113,7 +3131,7 @@ let SENT=jload(KSENT,{});if(!SENT||typeof SENT!=='object')SENT={};
 SENT.laporan=SENT.laporan||{};SENT.pencairan=SENT.pencairan||{};
 let QF=jload(KQF,{});if(!QF||typeof QF!=='object')QF={};
 function sentSnap(kind){
-  if(kind==='laporan')return LAP.map(l=>[l.id,1]);
+  if(kind==='laporan')return LAP.map(l=>[l.id,lapSt(l)]);
   if(kind==='pencairan')return PENC.map(r=>[r.id,r.upd||0]);
   return null;
 }
@@ -3125,7 +3143,7 @@ function sentCommit(kind,snap){
 }
 function qUnsent(){
   const n={laporan:0,pencairan:0};
-  LAP.forEach(l=>{if(SENT.laporan[l.id]!==1)n.laporan++});
+  LAP.forEach(l=>{if(SENT.laporan[l.id]!==lapSt(l))n.laporan++});
   PENC.forEach(r=>{if(SENT.pencairan[r.id]!==(r.upd||0))n.pencairan++});
   return n;
 }
