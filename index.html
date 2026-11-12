@@ -1857,7 +1857,7 @@ function lapSt(l){return (l.foto&&!l.fotoId)?0:(l.fotoId?2:1)}
 async function uploadFoto(){
   for(const l of LAP){ if(l.foto&&!l.fotoId){
     const j=await apiCall('foto_up',{id:String(l.id),data:l.foto});
-    if(j&&j.ok)l.fotoId=j.fid; else break; } }
+    if(j&&j.ok)l.fotoId=j.fid; else {LAST_ERR.foto=(j&&j.error)||'gagal';break} } }
   jsaveLap();
 }
 async function lihatFoto(id){
@@ -3143,7 +3143,7 @@ function sentCommit(kind,snap){
 }
 function qUnsent(){
   const n={laporan:0,pencairan:0};
-  LAP.forEach(l=>{if(SENT.laporan[l.id]!==lapSt(l))n.laporan++});
+  LAP.forEach(l=>{if(lapSt(l)===0||SENT.laporan[l.id]!==lapSt(l))n.laporan++});
   PENC.forEach(r=>{if(SENT.pencairan[r.id]!==(r.upd||0))n.pencairan++});
   return n;
 }
